@@ -1,0 +1,20 @@
+# Herramientas locales
+.tools/
+
+# Copia parcial / legacy
+admin-system/
+
+# Dependencias y builds
+node_modules/
+dist/
+build/
+.svelte-kit/
+
+# Variables de entorno y secretos
+.env
+.env.local
+.env.*.local
+
+# Logs y sistema
+*.log
+.DS_Store
