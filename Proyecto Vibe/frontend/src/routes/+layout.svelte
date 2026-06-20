@@ -7,20 +7,20 @@
 
   let { children } = $props();
 
-  let esLogin = $derived($page.url.pathname === '/login');
+  let esRutaPublica = $derived($page.url.pathname === '/');
   let usuario = $derived($auth.usuario);
 
   $effect(() => {
-    if (!esLogin && !usuario) {
-      goto('/login');
+    if (!esRutaPublica && !usuario) {
+      goto('/');
     }
-    if (esLogin && usuario) {
+    if (esRutaPublica && usuario) {
       goto('/dashboard');
     }
   });
 </script>
 
-{#if esLogin}
+{#if esRutaPublica}
   {@render children()}
 {:else if usuario}
   <div class="layout">

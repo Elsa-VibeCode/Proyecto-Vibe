@@ -5,9 +5,9 @@ const userSchema = new mongoose.Schema(
   {
     nombre: {
       type: String,
-      required: [true, 'El nombre es obligatorio'],
       trim: true,
       maxlength: 100,
+      default: '',
     },
     email: {
       type: String,
@@ -42,6 +42,10 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.pre('save', async function (next) {
+  if (!this.nombre && this.email) {
+    this.nombre = this.email.split('@')[0];
+  }
+
   if (!this.isModified('password')) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();

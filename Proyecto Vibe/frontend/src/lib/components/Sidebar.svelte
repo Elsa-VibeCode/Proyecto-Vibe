@@ -6,6 +6,8 @@
   const enlaces = [
     { href: '/dashboard', label: 'Panel', icon: '📊' },
     { href: '/usuarios', label: 'Usuarios', icon: '👥' },
+    { href: '/datos-excel', label: 'Datos Excel', icon: '📑' },
+    { href: '/mapa', label: 'Mapa', icon: '🗺️' },
   ];
 
   let usuario = $derived($auth.usuario);

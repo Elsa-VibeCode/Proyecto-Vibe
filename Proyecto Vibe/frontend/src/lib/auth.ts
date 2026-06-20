@@ -15,11 +15,22 @@ interface AuthState {
   cargando: boolean;
 }
 
+function obtenerEstadoInicial(): AuthState {
+  if (!browser) return { usuario: null, cargando: false };
+
+  const usuario = obtenerUsuarioGuardado<Usuario>();
+  const token = localStorage.getItem('token');
+
+  if (usuario && !token) {
+    eliminarUsuarioGuardado();
+    return { usuario: null, cargando: false };
+  }
+
+  return { usuario, cargando: false };
+}
+
 function crearAuthStore() {
-  const { subscribe, set, update } = writable<AuthState>({
-    usuario: browser ? obtenerUsuarioGuardado<Usuario>() : null,
-    cargando: false,
-  });
+  const { subscribe, set, update } = writable<AuthState>(obtenerEstadoInicial());
 
   return {
     subscribe,
@@ -28,6 +39,25 @@ function crearAuthStore() {
 
       try {
         const data = await api<{ token: string; usuario: Usuario }>('/auth/login', {
+          method: 'POST',
+          auth: false,
+          body: JSON.stringify({ email, password }),
+        });
+
+        guardarToken(data.token);
+        guardarUsuario(data.usuario);
+        set({ usuario: data.usuario, cargando: false });
+        return data.usuario;
+      } catch (error) {
+        update((s) => ({ ...s, cargando: false }));
+        throw error;
+      }
+    },
+    async registro(email: string, password: string) {
+      update((s) => ({ ...s, cargando: true }));
+
+      try {
+        const data = await api<{ token: string; usuario: Usuario }>('/auth/registro', {
           method: 'POST',
           auth: false,
           body: JSON.stringify({ email, password }),

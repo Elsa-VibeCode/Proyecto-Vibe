@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api } from '$lib/api';
+  import { api, apiDescargar } from '$lib/api';
   import { formatearFecha, etiquetaRol } from '$lib/utils';
   import type { Estadisticas } from '$lib/types';
 
   let estadisticas = $state<Estadisticas | null>(null);
   let error = $state('');
   let cargando = $state(true);
+  let exportando = $state(false);
 
   onMount(async () => {
     try {
@@ -18,6 +19,19 @@
       cargando = false;
     }
   });
+
+  async function exportarExcel() {
+    exportando = true;
+    error = '';
+
+    try {
+      await apiDescargar('/dashboard/exportar-excel', 'reporte-dashboard.xlsx');
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Error al exportar Excel';
+    } finally {
+      exportando = false;
+    }
+  }
 </script>
 
 <div class="page">
@@ -26,9 +40,14 @@
       <h1>Panel de control</h1>
       <p>Resumen general del sistema — zona horaria México (CDMX)</p>
     </div>
-    {#if estadisticas}
-      <span class="fecha">{estadisticas.fechaConsulta}</span>
-    {/if}
+    <div class="header-actions">
+      {#if estadisticas}
+        <span class="fecha">{estadisticas.fechaConsulta}</span>
+      {/if}
+      <button class="btn btn-secondary" onclick={exportarExcel} disabled={exportando || cargando}>
+        {exportando ? 'Exportando...' : 'Exportar a Excel'}
+      </button>
+    </div>
   </header>
 
   {#if cargando}
@@ -107,6 +126,14 @@
     align-items: flex-start;
     margin-bottom: 2rem;
     gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
   }
 
   .page-header h1 {
