@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: proyecto-vibe-api
+    runtime: node
+    rootDir: Proyecto Vibe/backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: TZ
+        value: America/Mexico_City
+      - key: CORS_ORIGIN
+        sync: false

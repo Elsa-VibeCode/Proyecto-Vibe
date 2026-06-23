@@ -1,0 +1,12 @@
+# Render Static Site — frontend
+# En el dashboard también puedes configurar esto manualmente.
+services:
+  - type: web
+    name: proyecto-vibe-frontend
+    runtime: static
+    rootDir: Proyecto Vibe/frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    envVars:
+      - key: PUBLIC_API_URL
+        sync: false

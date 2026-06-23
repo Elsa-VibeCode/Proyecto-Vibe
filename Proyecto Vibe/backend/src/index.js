@@ -21,7 +21,15 @@ const origenesPermitidos = [
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || origenesPermitidos.includes(origin)) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const permitido =
+        origenesPermitidos.includes(origin) || origin.endsWith('.onrender.com');
+
+      if (permitido) {
         callback(null, true);
       } else {
         callback(new Error('Origen no permitido por CORS'));
