@@ -1,28 +1,26 @@
 <script lang="ts">
   import '../app.css';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { auth } from '$lib/auth';
   import Sidebar from '$lib/components/Sidebar.svelte';
 
   let { children } = $props();
 
-  let esRutaPublica = $derived($page.url.pathname === '/');
-  let usuario = $derived($auth.usuario);
-
   $effect(() => {
-    if (!esRutaPublica && !usuario) {
+    const esPublica = page.url.pathname === '/';
+
+    if (!esPublica && !$auth.usuario) {
       goto('/');
-    }
-    if (esRutaPublica && usuario) {
+    } else if (esPublica && $auth.usuario) {
       goto('/dashboard');
     }
   });
 </script>
 
-{#if esRutaPublica}
+{#if page.url.pathname === '/'}
   {@render children()}
-{:else if usuario}
+{:else if $auth.usuario}
   <div class="layout">
     <Sidebar />
     <main>{@render children()}</main>

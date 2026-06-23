@@ -50,7 +50,14 @@ export function guardarUsuario(usuario: object) {
 export function obtenerUsuarioGuardado<T>(): T | null {
   if (!browser) return null;
   const data = localStorage.getItem('usuario');
-  return data ? JSON.parse(data) : null;
+  if (!data) return null;
+
+  try {
+    return JSON.parse(data) as T;
+  } catch {
+    localStorage.removeItem('usuario');
+    return null;
+  }
 }
 
 export function eliminarUsuarioGuardado() {

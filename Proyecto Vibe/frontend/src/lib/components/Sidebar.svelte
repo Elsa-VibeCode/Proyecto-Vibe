@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { auth } from '$lib/auth';
   import { etiquetaRol } from '$lib/utils';
 
@@ -9,9 +9,6 @@
     { href: '/datos-excel', label: 'Datos Excel', icon: '📑' },
     { href: '/mapa', label: 'Mapa', icon: '🗺️' },
   ];
-
-  let usuario = $derived($auth.usuario);
-  let rutaActual = $derived($page.url.pathname);
 </script>
 
 <aside class="sidebar">
@@ -27,7 +24,7 @@
     {#each enlaces as enlace}
       <a
         href={enlace.href}
-        class:active={rutaActual.startsWith(enlace.href)}
+        class:active={page.url.pathname.startsWith(enlace.href)}
       >
         <span>{enlace.icon}</span>
         {enlace.label}
@@ -35,11 +32,11 @@
     {/each}
   </nav>
 
-  {#if usuario}
+  {#if $auth.usuario}
     <div class="user-panel">
       <div class="user-info">
-        <strong>{usuario.nombre}</strong>
-        <span>{etiquetaRol(usuario.rol)}</span>
+        <strong>{$auth.usuario.nombre}</strong>
+        <span>{etiquetaRol($auth.usuario.rol)}</span>
       </div>
       <button class="btn btn-secondary logout" onclick={() => auth.logout()}>
         Cerrar sesión
