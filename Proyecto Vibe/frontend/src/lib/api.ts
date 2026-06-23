@@ -3,8 +3,16 @@ import { env } from '$env/dynamic/public';
 
 const BACKEND_PRODUCCION = 'https://proyecto-vibe-1.onrender.com/api';
 
-function resolverApiUrl(): string {
-  if (env.PUBLIC_API_URL) return env.PUBLIC_API_URL;
+function normalizarApiUrl(url: string): string {
+  const limpia = url.trim().replace(/\/+$/, '');
+  if (limpia.endsWith('/api')) return limpia;
+  return `${limpia}/api`;
+}
+
+function obtenerApiUrl(): string {
+  if (env.PUBLIC_API_URL?.trim()) {
+    return normalizarApiUrl(env.PUBLIC_API_URL);
+  }
 
   if (browser) {
     if (window.location.hostname.endsWith('.onrender.com')) {
@@ -16,7 +24,11 @@ function resolverApiUrl(): string {
   return 'http://localhost:3000/api';
 }
 
-const API_URL = resolverApiUrl();
+function construirUrl(endpoint: string): string {
+  const base = obtenerApiUrl();
+  const ruta = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${base}${ruta}`;
+}
 
 function obtenerToken(): string | null {
   if (!browser) return null;
@@ -65,7 +77,7 @@ export async function api<T>(endpoint: string, opciones: OpcionesFetch = {}): Pr
   let respuesta: Response;
 
   try {
-    respuesta = await fetch(`${API_URL}${endpoint}`, {
+    respuesta = await fetch(construirUrl(endpoint), {
       ...resto,
       headers: cabeceras,
     });
@@ -85,7 +97,13 @@ export async function api<T>(endpoint: string, opciones: OpcionesFetch = {}): Pr
   const datos = await respuesta.json().catch(() => null);
 
   if (!respuesta.ok) {
-    throw new Error((datos as { mensaje?: string })?.mensaje || 'Error en la solicitud');
+    const mensaje = (datos as { mensaje?: string })?.mensaje;
+    if (respuesta.status === 404 && mensaje === 'Ruta no encontrada') {
+      throw new Error(
+        'La API no respondió en la ruta esperada. En Render, PUBLIC_API_URL debe terminar en /api (ejemplo: https://proyecto-vibe-1.onrender.com/api).'
+      );
+    }
+    throw new Error(mensaje || 'Error en la solicitud');
   }
 
   if (datos === null) {
@@ -110,7 +128,7 @@ export async function apiSubirArchivo<T>(
   let respuesta: Response;
 
   try {
-    respuesta = await fetch(`${API_URL}${endpoint}`, {
+    respuesta = await fetch(construirUrl(endpoint), {
       method: 'POST',
       headers: cabeceras,
       body: formData,
@@ -136,7 +154,7 @@ export async function apiDescargar(endpoint: string, nombreArchivo: string): Pro
   let respuesta: Response;
 
   try {
-    respuesta = await fetch(`${API_URL}${endpoint}`, { headers: cabeceras });
+    respuesta = await fetch(construirUrl(endpoint), { headers: cabeceras });
   } catch {
     throw new Error('No se pudo conectar con el servidor para descargar el archivo.');
   }
@@ -163,7 +181,7 @@ export async function apiDescargarPost(
   let respuesta: Response;
 
   try {
-    respuesta = await fetch(`${API_URL}${endpoint}`, {
+    respuesta = await fetch(construirUrl(endpoint), {
       method: 'POST',
       headers: cabeceras,
       body: JSON.stringify(body),
