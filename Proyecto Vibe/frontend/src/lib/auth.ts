@@ -44,6 +44,10 @@ function crearAuthStore() {
           body: JSON.stringify({ email, password }),
         });
 
+        if (!data?.token || !data?.usuario) {
+          throw new Error('Credenciales incorrectas o respuesta inválida del servidor.');
+        }
+
         guardarToken(data.token);
         guardarUsuario(data.usuario);
         set({ usuario: data.usuario, cargando: false });
@@ -62,6 +66,10 @@ function crearAuthStore() {
           auth: false,
           body: JSON.stringify({ email, password }),
         });
+
+        if (!data?.token || !data?.usuario) {
+          throw new Error('No se pudo completar el registro. Intenta de nuevo.');
+        }
 
         guardarToken(data.token);
         guardarUsuario(data.usuario);

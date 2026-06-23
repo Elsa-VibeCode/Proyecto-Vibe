@@ -9,4 +9,4 @@ services:
     staticPublishPath: build
     envVars:
       - key: PUBLIC_API_URL
-        sync: false
+        value: https://proyecto-vibe-1.onrender.com/api

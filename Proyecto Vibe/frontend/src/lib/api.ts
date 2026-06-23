@@ -1,7 +1,22 @@
 import { browser } from '$app/environment';
 import { env } from '$env/dynamic/public';
 
-const API_URL = env.PUBLIC_API_URL ?? (browser ? '/api' : 'http://localhost:3000/api');
+const BACKEND_PRODUCCION = 'https://proyecto-vibe-1.onrender.com/api';
+
+function resolverApiUrl(): string {
+  if (env.PUBLIC_API_URL) return env.PUBLIC_API_URL;
+
+  if (browser) {
+    if (window.location.hostname.endsWith('.onrender.com')) {
+      return BACKEND_PRODUCCION;
+    }
+    return '/api';
+  }
+
+  return 'http://localhost:3000/api';
+}
+
+const API_URL = resolverApiUrl();
 
 function obtenerToken(): string | null {
   if (!browser) return null;
@@ -60,10 +75,21 @@ export async function api<T>(endpoint: string, opciones: OpcionesFetch = {}): Pr
     );
   }
 
-  const datos = await respuesta.json().catch(() => ({}));
+  const contentType = respuesta.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    throw new Error(
+      'No se pudo conectar con la API. Verifica PUBLIC_API_URL en Render y vuelve a desplegar el frontend.'
+    );
+  }
+
+  const datos = await respuesta.json().catch(() => null);
 
   if (!respuesta.ok) {
-    throw new Error(datos.mensaje || 'Error en la solicitud');
+    throw new Error((datos as { mensaje?: string })?.mensaje || 'Error en la solicitud');
+  }
+
+  if (datos === null) {
+    throw new Error('Respuesta inválida del servidor.');
   }
 
   return datos as T;
