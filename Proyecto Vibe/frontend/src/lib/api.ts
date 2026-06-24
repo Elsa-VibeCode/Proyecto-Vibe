@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import { env } from '$env/dynamic/public';
+import { obtenerTokenClerk } from './clerk';
 
 const BACKEND_PRODUCCION = 'https://proyecto-vibe-1.onrender.com/api';
 
@@ -30,46 +31,37 @@ function construirUrl(endpoint: string): string {
   return `${base}${ruta}`;
 }
 
-function obtenerToken(): string | null {
-  if (!browser) return null;
-  return localStorage.getItem('token');
+async function resolverTokenAuth(): Promise<string | null> {
+  return obtenerTokenClerk();
 }
 
-export function guardarToken(token: string) {
-  if (browser) localStorage.setItem('token', token);
+export function guardarToken(_token: string) {
+  // Clerk gestiona la sesión; no se usa localStorage.
 }
 
 export function eliminarToken() {
-  if (browser) localStorage.removeItem('token');
+  // Clerk gestiona la sesión; no se usa localStorage.
 }
 
-export function guardarUsuario(usuario: object) {
-  if (browser) localStorage.setItem('usuario', JSON.stringify(usuario));
+export function guardarUsuario(_usuario: object) {
+  // El perfil se obtiene desde la API con el token de Clerk.
 }
 
 export function obtenerUsuarioGuardado<T>(): T | null {
-  if (!browser) return null;
-  const data = localStorage.getItem('usuario');
-  if (!data) return null;
-
-  try {
-    return JSON.parse(data) as T;
-  } catch {
-    localStorage.removeItem('usuario');
-    return null;
-  }
+  return null;
 }
 
 export function eliminarUsuarioGuardado() {
-  if (browser) localStorage.removeItem('usuario');
+  // El perfil se obtiene desde la API con el token de Clerk.
 }
 
 interface OpcionesFetch extends RequestInit {
   auth?: boolean;
+  token?: string | null;
 }
 
 export async function api<T>(endpoint: string, opciones: OpcionesFetch = {}): Promise<T> {
-  const { auth = true, headers, ...resto } = opciones;
+  const { auth = true, token: tokenManual, headers, ...resto } = opciones;
 
   const cabeceras: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -77,7 +69,7 @@ export async function api<T>(endpoint: string, opciones: OpcionesFetch = {}): Pr
   };
 
   if (auth) {
-    const token = obtenerToken();
+    const token = tokenManual ?? (await resolverTokenAuth());
     if (token) cabeceras.Authorization = `Bearer ${token}`;
   }
 
@@ -129,7 +121,7 @@ export async function apiSubirArchivo<T>(
   formData.append(campo, archivo);
 
   const cabeceras: Record<string, string> = {};
-  const token = obtenerToken();
+  const token = await resolverTokenAuth();
   if (token) cabeceras.Authorization = `Bearer ${token}`;
 
   let respuesta: Response;
@@ -155,7 +147,7 @@ export async function apiSubirArchivo<T>(
 
 export async function apiDescargar(endpoint: string, nombreArchivo: string): Promise<void> {
   const cabeceras: Record<string, string> = {};
-  const token = obtenerToken();
+  const token = await resolverTokenAuth();
   if (token) cabeceras.Authorization = `Bearer ${token}`;
 
   let respuesta: Response;
@@ -182,7 +174,7 @@ export async function apiDescargarPost(
   const cabeceras: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  const token = obtenerToken();
+  const token = await resolverTokenAuth();
   if (token) cabeceras.Authorization = `Bearer ${token}`;
 
   let respuesta: Response;

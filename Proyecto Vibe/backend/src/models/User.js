@@ -16,11 +16,19 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    clerkId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
     password: {
       type: String,
-      required: [true, 'La contraseña es obligatoria'],
       minlength: 6,
       select: false,
+      required() {
+        return !this.clerkId;
+      },
     },
     rol: {
       type: String,
@@ -46,7 +54,7 @@ userSchema.pre('save', async function (next) {
     this.nombre = this.email.split('@')[0];
   }
 
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || !this.password) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });

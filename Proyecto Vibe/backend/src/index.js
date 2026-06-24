@@ -1,13 +1,12 @@
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { connectDB } from './config/db.js';
+import webhookRoutes from './routes/webhooks.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import dashboardRoutes from './routes/dashboard.js';
 import excelRoutes from './routes/excel.js';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -38,6 +37,10 @@ app.use(
     credentials: true,
   })
 );
+
+// Webhooks de Clerk requieren body sin parsear (Svix)
+app.use('/api/webhooks', webhookRoutes);
+
 app.use(express.json());
 
 app.get('/api/salud', (_req, res) => {

@@ -2,6 +2,7 @@
   import { page } from '$app/state';
   import { auth } from '$lib/auth';
   import { etiquetaRol } from '$lib/utils';
+  import { UserButton } from 'svelte-clerk';
 
   const enlaces = [
     { href: '/dashboard', label: 'Panel', icon: '📊' },
@@ -38,9 +39,7 @@
         <strong>{$auth.usuario.nombre}</strong>
         <span>{etiquetaRol($auth.usuario.rol)}</span>
       </div>
-      <button class="btn btn-secondary logout" onclick={() => auth.logout()}>
-        Cerrar sesión
-      </button>
+      <UserButton />
     </div>
   {/if}
 </aside>
@@ -128,16 +127,5 @@
   .user-info span {
     font-size: 0.75rem;
     color: #94a3b8;
-  }
-
-  .logout {
-    width: 100%;
-    color: #e2e8f0;
-    border-color: #334155;
-    background: transparent;
-  }
-
-  .logout:hover {
-    background: #1e293b;
   }
 </style>
