@@ -17,8 +17,8 @@ function crearAuthStore() {
 
   return {
     subscribe,
-    async sincronizarPerfil(token?: string | null): Promise<{ ok: boolean; error?: string }> {
-      if (sincronizando) return { ok: false };
+    async sincronizarPerfil(token?: string | null): Promise<{ ok: boolean; error?: string; pendiente?: boolean }> {
+      if (sincronizando) return { ok: false, pendiente: true };
       sincronizando = true;
       update((s) => ({ ...s, cargando: true }));
 

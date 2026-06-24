@@ -82,7 +82,7 @@ export async function api<T>(endpoint: string, opciones: OpcionesFetch = {}): Pr
     });
   } catch {
     throw new Error(
-      'No se pudo conectar con el servidor. Verifica que el backend esté corriendo en el puerto 3000.'
+      'No se pudo conectar con el servidor. Verifica que el backend esté en línea (Render) o corriendo en local.'
     );
   }
 

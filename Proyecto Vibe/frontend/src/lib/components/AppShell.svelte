@@ -24,10 +24,11 @@
     }
 
     const resultado = await auth.sincronizarPerfil(token);
+    if (resultado.pendiente) return;
     if (!resultado.ok) {
       errorSync =
         resultado.error ??
-        'No se pudo conectar con el backend. Verifica que esté corriendo en el puerto 3000.';
+        'No se pudo conectar con el backend. Verifica que esté en línea y que las variables de Clerk estén en Render.';
     } else {
       errorSync = '';
     }
