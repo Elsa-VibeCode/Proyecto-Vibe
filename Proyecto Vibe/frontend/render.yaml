@@ -10,3 +10,10 @@ services:
     envVars:
       - key: PUBLIC_API_URL
         value: https://proyecto-vibe-1.onrender.com/api
+    routes:
+      - type: rewrite
+        source: /sign-up/*
+        destination: /sign-up.html
+      - type: rewrite
+        source: /sign-in/*
+        destination: /sign-in.html

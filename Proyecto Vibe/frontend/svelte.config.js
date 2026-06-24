@@ -5,6 +5,7 @@ const config = {
   kit: {
     prerender: {
       handleUnseenRoutes: 'ignore',
+      entries: ['*', '/sign-in', '/sign-up'],
     },
     adapter: adapter({
       fallback: 'index.html',
