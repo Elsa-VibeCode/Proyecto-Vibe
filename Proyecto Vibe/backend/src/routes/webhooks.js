@@ -45,8 +45,12 @@ router.post('/clerk', express.raw({ type: 'application/json' }), async (req, res
       const email = obtenerEmailPrincipal(evento.data);
       if (email) {
         const nombre = [evento.data.first_name, evento.data.last_name].filter(Boolean).join(' ');
-        await enviarBienvenida({ email, nombre });
-        console.log(`✓ Correo de bienvenida enviado a ${email}`);
+        try {
+          await enviarBienvenida({ email, nombre });
+          console.log(`✓ Correo de bienvenida enviado a ${email}`);
+        } catch (emailError) {
+          console.error(`✗ No se pudo enviar bienvenida a ${email}:`, emailError.message);
+        }
       }
     }
 
@@ -54,13 +58,20 @@ router.post('/clerk', express.raw({ type: 'application/json' }), async (req, res
       const data = evento.data;
 
       if (data.delivered_by_clerk === false && data.to_email_address) {
-        await enviarCorreoClerk({
-          para: data.to_email_address,
-          asunto: data.subject,
-          cuerpoHtml: data.body,
-          cuerpoTexto: data.body_plain ?? undefined,
-        });
-        console.log(`✓ Correo Clerk (${data.slug}) enviado vía Resend a ${data.to_email_address}`);
+        try {
+          await enviarCorreoClerk({
+            para: data.to_email_address,
+            asunto: data.subject,
+            cuerpoHtml: data.body,
+            cuerpoTexto: data.body_plain ?? undefined,
+          });
+          console.log(`✓ Correo Clerk (${data.slug}) enviado vía Resend a ${data.to_email_address}`);
+        } catch (emailError) {
+          console.error(
+            `✗ No se pudo enviar correo Clerk (${data.slug}) a ${data.to_email_address}:`,
+            emailError.message
+          );
+        }
       }
     }
 
