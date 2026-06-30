@@ -2,12 +2,17 @@
   import { onMount } from 'svelte';
   import { api, apiDescargar } from '$lib/api';
   import { formatearFecha, etiquetaRol } from '$lib/utils';
+  import Modal from '$lib/components/Modal.svelte';
   import type { Estadisticas } from '$lib/types';
 
   let estadisticas = $state<Estadisticas | null>(null);
   let error = $state('');
   let cargando = $state(true);
   let exportando = $state(false);
+  let modalEnvioAbierto = $state(false);
+  let correoDestinatario = $state('');
+  let enviandoReporte = $state(false);
+  let mensajeExito = $state('');
 
   onMount(async () => {
     try {
@@ -23,6 +28,7 @@
   async function exportarExcel() {
     exportando = true;
     error = '';
+    mensajeExito = '';
 
     try {
       await apiDescargar('/dashboard/exportar-excel', 'reporte-dashboard.xlsx');
@@ -30,6 +36,38 @@
       error = err instanceof Error ? err.message : 'Error al exportar Excel';
     } finally {
       exportando = false;
+    }
+  }
+
+  function abrirModalEnvio() {
+    correoDestinatario = '';
+    error = '';
+    mensajeExito = '';
+    modalEnvioAbierto = true;
+  }
+
+  function cerrarModalEnvio() {
+    modalEnvioAbierto = false;
+    correoDestinatario = '';
+  }
+
+  async function enviarReporte(event: SubmitEvent) {
+    event.preventDefault();
+    enviandoReporte = true;
+    error = '';
+    mensajeExito = '';
+
+    try {
+      const data = await api<{ mensaje: string }>('/dashboard/enviar-reporte', {
+        method: 'POST',
+        body: JSON.stringify({ destinatario: correoDestinatario.trim() }),
+      });
+      mensajeExito = data.mensaje;
+      cerrarModalEnvio();
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Error al enviar el reporte';
+    } finally {
+      enviandoReporte = false;
     }
   }
 </script>
@@ -47,8 +85,15 @@
       <button class="btn btn-secondary" onclick={exportarExcel} disabled={exportando || cargando}>
         {exportando ? 'Exportando...' : 'Exportar a Excel'}
       </button>
+      <button class="btn btn-primary" onclick={abrirModalEnvio} disabled={cargando || enviandoReporte}>
+        {enviandoReporte ? 'Enviando...' : 'Exportar reporte y enviar'}
+      </button>
     </div>
   </header>
+
+  {#if mensajeExito}
+    <div class="alert alert-success">{mensajeExito}</div>
+  {/if}
 
   {#if cargando}
     <p class="estado">Cargando estadísticas...</p>
@@ -118,6 +163,33 @@
     </section>
   {/if}
 </div>
+
+<Modal abierto={modalEnvioAbierto} titulo="Exportar reporte y enviar" onCerrar={cerrarModalEnvio}>
+  <form onsubmit={enviarReporte}>
+    <p class="modal-descripcion">
+      Se generará el Excel del panel de control y se enviará al correo indicado.
+    </p>
+
+    <div class="form-group">
+      <label class="label" for="correo-destinatario">Correo del destinatario</label>
+      <input
+        id="correo-destinatario"
+        class="input"
+        type="email"
+        bind:value={correoDestinatario}
+        placeholder="ejemplo@correo.com"
+        required
+      />
+    </div>
+
+    <div class="form-actions">
+      <button type="button" class="btn btn-secondary" onclick={cerrarModalEnvio}>Cancelar</button>
+      <button type="submit" class="btn btn-primary" disabled={enviandoReporte}>
+        {enviandoReporte ? 'Enviando...' : 'Generar y enviar'}
+      </button>
+    </div>
+  </form>
+</Modal>
 
 <style>
   .page-header {
@@ -227,5 +299,31 @@
   .recientes h2 {
     font-size: 1.1rem;
     margin-bottom: 1rem;
+  }
+
+  .modal-descripcion {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 1.25rem;
+    line-height: 1.5;
+  }
+
+  .form-group {
+    margin-bottom: 1.25rem;
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+  }
+
+  .alert-success {
+    margin-bottom: 1rem;
+    padding: 0.875rem 1rem;
+    border-radius: var(--radius);
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
   }
 </style>
