@@ -25,10 +25,9 @@
     }
   });
 
-  async function exportarExcel() {
+  async function descargarDesdeModal() {
     exportando = true;
     error = '';
-    mensajeExito = '';
 
     try {
       await apiDescargar('/dashboard/exportar-excel', 'reporte-dashboard.xlsx');
@@ -82,11 +81,8 @@
       {#if estadisticas}
         <span class="fecha">{estadisticas.fechaConsulta}</span>
       {/if}
-      <button class="btn btn-secondary" onclick={exportarExcel} disabled={exportando || cargando}>
-        {exportando ? 'Exportando...' : 'Exportar a Excel'}
-      </button>
       <button class="btn btn-primary" onclick={abrirModalEnvio} disabled={cargando || enviandoReporte}>
-        {enviandoReporte ? 'Enviando...' : 'Exportar reporte y enviar'}
+        Exportar reporte y enviar
       </button>
     </div>
   </header>
@@ -170,6 +166,10 @@
       Se generará el Excel del panel de control y se enviará al correo indicado.
     </p>
 
+    {#if error && modalEnvioAbierto}
+      <div class="alert alert-error modal-error">{error}</div>
+    {/if}
+
     <div class="form-group">
       <label class="label" for="correo-destinatario">Correo del destinatario</label>
       <input
@@ -183,6 +183,14 @@
     </div>
 
     <div class="form-actions">
+      <button
+        type="button"
+        class="btn btn-link"
+        onclick={descargarDesdeModal}
+        disabled={exportando || enviandoReporte}
+      >
+        {exportando ? 'Descargando...' : 'Solo descargar Excel'}
+      </button>
       <button type="button" class="btn btn-secondary" onclick={cerrarModalEnvio}>Cancelar</button>
       <button type="submit" class="btn btn-primary" disabled={enviandoReporte}>
         {enviandoReporte ? 'Enviando...' : 'Generar y enviar'}
@@ -308,6 +316,10 @@
     line-height: 1.5;
   }
 
+  .modal-error {
+    margin-bottom: 1rem;
+  }
+
   .form-group {
     margin-bottom: 1.25rem;
   }
@@ -315,7 +327,25 @@
   .form-actions {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
     gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-link {
+    margin-right: auto;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    font-size: 0.875rem;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .btn-link:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   .alert-success {
