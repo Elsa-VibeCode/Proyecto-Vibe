@@ -23,6 +23,14 @@ const excelImportSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    tipoHoja: {
+      type: String,
+      default: 'generico',
+    },
+    datosEstructurados: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
     subidoPor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

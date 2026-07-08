@@ -115,10 +115,17 @@ export async function api<T>(endpoint: string, opciones: OpcionesFetch = {}): Pr
 export async function apiSubirArchivo<T>(
   endpoint: string,
   archivo: File,
-  campo = 'archivo'
+  campo = 'archivo',
+  camposExtra?: Record<string, string>
 ): Promise<T> {
   const formData = new FormData();
   formData.append(campo, archivo);
+
+  if (camposExtra) {
+    for (const [clave, valor] of Object.entries(camposExtra)) {
+      formData.append(clave, valor);
+    }
+  }
 
   const cabeceras: Record<string, string> = {};
   const token = await resolverTokenAuth();

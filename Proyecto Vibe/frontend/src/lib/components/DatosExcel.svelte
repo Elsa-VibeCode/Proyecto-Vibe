@@ -1,38 +1,68 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, apiSubirArchivo, apiDescargar, apiDescargarPost } from '$lib/api';
-  import type { ImportacionExcel } from '$lib/types/excel';
+  import type { ImportacionExcel, PrevisualizacionLibro } from '$lib/types/excel';
   import {
     detectarColumnas,
+    detectarTipoHoja,
+    etiquetaTipoHoja,
     filtrarFilas,
     valoresUnicos,
     calcularResumenNiveles,
     calcularResumenPuestos,
+    calcularResumenUnidades,
     filtrosVacios,
     formatearMoneda,
+    tieneFiltrosDetectados,
     type FiltrosRh,
     type MapeoColumnas,
     type ResumenNivel,
     type ResumenPuesto,
+    type ResumenUnidad,
+    type TipoHoja,
   } from '$lib/excelFiltros';
 
   let archivoSeleccionado = $state<File | null>(null);
   let importacionActual = $state<ImportacionExcel | null>(null);
   let historial = $state<ImportacionExcel[]>([]);
+  let previsualizacion = $state<PrevisualizacionLibro | null>(null);
+  let hojaSeleccionada = $state('');
   let error = $state('');
   let mensaje = $state('');
   let cargando = $state(false);
   let cargandoHistorial = $state(true);
+  let cargandoPrevisualizacion = $state(false);
   let filtros = $state<FiltrosRh>(filtrosVacios());
 
   let mapeo = $derived(
     importacionActual ? detectarColumnas(importacionActual.columnas) : null
   );
 
+  let tipoHoja = $derived(
+    (importacionActual?.tipoHoja as TipoHoja | undefined) ??
+      (mapeo ? detectarTipoHoja(mapeo, importacionActual?.columnas ?? []) : ('generico' as TipoHoja))
+  );
+
   let filasFiltradas = $derived.by(() => {
     if (!importacionActual?.filas || !mapeo) return [];
     return filtrarFilas(importacionActual.filas, mapeo, filtros);
   });
+
+  let colaboradoresDisponibles = $derived(
+    importacionActual && mapeo ? valoresUnicos(importacionActual.filas ?? [], mapeo.colaborador) : []
+  );
+
+  let clientesDisponibles = $derived(
+    importacionActual && mapeo ? valoresUnicos(importacionActual.filas ?? [], mapeo.cliente) : []
+  );
+
+  let unidadesDisponibles = $derived(
+    importacionActual && mapeo ? valoresUnicos(importacionActual.filas ?? [], mapeo.unidad) : []
+  );
+
+  let estadosDisponibles = $derived(
+    importacionActual && mapeo ? valoresUnicos(importacionActual.filas ?? [], mapeo.estado) : []
+  );
 
   let puestosDisponibles = $derived(
     importacionActual && mapeo ? valoresUnicos(importacionActual.filas ?? [], mapeo.puesto) : []
@@ -56,6 +86,11 @@
     return calcularResumenPuestos(filasFiltradas, mapeo);
   });
 
+  let resumenUnidades = $derived.by(() => {
+    if (!mapeo) return [] as ResumenUnidad[];
+    return calcularResumenUnidades(filasFiltradas, mapeo);
+  });
+
   let conSeguro = $derived(
     filasFiltradas.filter((f) => {
       if (!mapeo?.seguroMedico) return false;
@@ -64,9 +99,7 @@
     }).length
   );
 
-  let tieneFiltrosRh = $derived(
-    !!mapeo?.puesto || !!mapeo?.nivelPuesto || !!mapeo?.categoria || !!mapeo?.sueldo || !!mapeo?.tiempoPuesto || !!mapeo?.seguroMedico
-  );
+  let tieneFiltrosRh = $derived(mapeo ? tieneFiltrosDetectados(mapeo) : false);
 
   let hayFiltrosActivos = $derived(
     Object.values(filtros).some((v) => v !== '')
@@ -92,16 +125,40 @@
     cargarHistorial();
   });
 
-  function seleccionarArchivo(e: Event) {
+  async function seleccionarArchivo(e: Event) {
     const input = e.target as HTMLInputElement;
     archivoSeleccionado = input.files?.[0] ?? null;
+    previsualizacion = null;
+    hojaSeleccionada = '';
     error = '';
     mensaje = '';
+
+    if (!archivoSeleccionado) return;
+
+    cargandoPrevisualizacion = true;
+    try {
+      const data = await apiSubirArchivo<PrevisualizacionLibro>(
+        '/excel/previsualizar',
+        archivoSeleccionado
+      );
+      previsualizacion = data;
+      hojaSeleccionada = data.hojaSugerida;
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Error al previsualizar el archivo';
+      archivoSeleccionado = null;
+    } finally {
+      cargandoPrevisualizacion = false;
+    }
   }
 
   async function importarArchivo() {
     if (!archivoSeleccionado) {
       error = 'Selecciona un archivo Excel (.xlsx o .xls)';
+      return;
+    }
+
+    if (!hojaSeleccionada) {
+      error = 'Selecciona la hoja que deseas importar';
       return;
     }
 
@@ -112,16 +169,21 @@
     try {
       const data = await apiSubirArchivo<{
         mensaje: string;
-        importacion: ImportacionExcel & { id: string };
-      }>('/excel/importar', archivoSeleccionado);
+        importacion: ImportacionExcel & { id: string; tipoHoja?: string };
+      }>('/excel/importar', archivoSeleccionado, 'archivo', {
+        nombreHoja: hojaSeleccionada,
+      });
 
       importacionActual = {
         ...data.importacion,
         _id: data.importacion.id,
+        tipoHoja: data.importacion.tipoHoja,
       };
       reiniciarFiltros();
       mensaje = data.mensaje;
       archivoSeleccionado = null;
+      previsualizacion = null;
+      hojaSeleccionada = '';
       await cargarHistorial();
     } catch (err) {
       error = err instanceof Error ? err.message : 'Error al importar archivo';
@@ -169,6 +231,10 @@
   function etiquetaMapeo(mapeoColumnas: MapeoColumnas | null): string {
     if (!mapeoColumnas) return '';
     const campos = [
+      mapeoColumnas.colaborador && `Colaborador: ${mapeoColumnas.colaborador}`,
+      mapeoColumnas.cliente && `Cliente: ${mapeoColumnas.cliente}`,
+      mapeoColumnas.unidad && `Unidad: ${mapeoColumnas.unidad}`,
+      mapeoColumnas.estado && `Estado: ${mapeoColumnas.estado}`,
       mapeoColumnas.puesto && `Puesto: ${mapeoColumnas.puesto}`,
       mapeoColumnas.nivelPuesto && `Nivel: ${mapeoColumnas.nivelPuesto}`,
       mapeoColumnas.categoria && `Categoría: ${mapeoColumnas.categoria}`,
@@ -178,13 +244,17 @@
     ].filter(Boolean);
     return campos.join(' · ');
   }
+
+  function hojaPrevisualizada(nombre: string) {
+    return previsualizacion?.hojas.find((h) => h.nombreHoja === nombre);
+  }
 </script>
 
 <div class="excel-contenedor">
   <section class="card importar-seccion">
     <h2>Importar archivo Excel</h2>
     <p class="descripcion">
-      Sube un archivo con columnas de RR.HH.: nivel de puesto, categoría, tiempo en el puesto, sueldo y seguro de gastos médicos.
+      Sube un archivo Excel con varias hojas. El sistema detecta automáticamente los encabezados y te permite elegir la hoja a importar (por ejemplo: <strong>Sueldos por Unidad</strong> o <strong>Mapa Unidades</strong>).
     </p>
 
     <p class="ejemplo-descarga">
@@ -200,7 +270,11 @@
         accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
         onchange={seleccionarArchivo}
       />
-      <button class="btn btn-primary" onclick={importarArchivo} disabled={cargando || !archivoSeleccionado}>
+      <button
+        class="btn btn-primary"
+        onclick={importarArchivo}
+        disabled={cargando || cargandoPrevisualizacion || !archivoSeleccionado || !hojaSeleccionada}
+      >
         {cargando ? 'Procesando...' : 'Importar Excel'}
       </button>
     </div>
@@ -208,10 +282,56 @@
     {#if archivoSeleccionado}
       <p class="archivo-nombre">Archivo: {archivoSeleccionado.name}</p>
     {/if}
+
+    {#if cargandoPrevisualizacion}
+      <p class="estado">Analizando hojas del archivo...</p>
+    {/if}
+
+    {#if previsualizacion}
+      <div class="selector-hojas">
+        <label class="label" for="hoja-excel">Hoja a importar</label>
+        <select id="hoja-excel" class="select" bind:value={hojaSeleccionada}>
+          {#each previsualizacion.hojas as hoja}
+            <option value={hoja.nombreHoja}>
+              {hoja.nombreHoja} ({hoja.totalFilas} filas){hoja.recomendada ? ' ★' : ''}
+            </option>
+          {/each}
+        </select>
+
+        {#if hojaSeleccionada}
+          {@const info = hojaPrevisualizada(hojaSeleccionada)}
+          {#if info}
+            <div class="hoja-preview">
+              <p>
+                Encabezados en fila {info.filaEncabezado} ·
+                {info.columnas.length} columnas · {info.totalFilas} registros
+              </p>
+              {#if info.columnas.length > 0}
+                <p class="columnas-preview">
+                  Columnas: {info.columnas.join(', ')}
+                </p>
+              {/if}
+            </div>
+          {/if}
+        {/if}
+      </div>
+    {/if}
   </section>
 
   {#if mensaje}
     <div class="alert alert-success">{mensaje}</div>
+  {/if}
+
+  {#if importacionActual && (tipoHoja === 'facturacion' || tipoHoja === 'resumen-mensual')}
+    <div class="alert alert-info">
+      {#if tipoHoja === 'facturacion'}
+        Datos de facturación importados. Ver el módulo completo en
+        <a href="/facturacion">Facturación</a>.
+      {:else}
+        Resumen mensual importado. Ver el dashboard en
+        <a href="/finanzas">Finanzas</a>.
+      {/if}
+    </div>
   {/if}
 
   {#if error}
@@ -223,8 +343,14 @@
       <div class="reporte-header">
         <div>
           <h2>Reporte de datos</h2>
-          <p>{importacionActual.nombreArchivo} · Hoja: {importacionActual.nombreHoja}</p>
+          <p>
+            {importacionActual.nombreArchivo} · Hoja: {importacionActual.nombreHoja}
+            {#if importacionActual.filaEncabezado}
+              · Encabezados fila {importacionActual.filaEncabezado}
+            {/if}
+          </p>
           {#if mapeo && tieneFiltrosRh}
+            <p class="tipo-hoja-badge">{etiquetaTipoHoja(tipoHoja)}</p>
             <p class="mapeo-info">{etiquetaMapeo(mapeo)}</p>
           {/if}
         </div>
@@ -242,26 +368,87 @@
           <span class="stat-label">Total importadas</span>
           <span class="stat-value">{importacionActual.totalFilas}</span>
         </div>
-        <div class="stat-card">
-          <span class="stat-label">Con seguro médico</span>
-          <span class="stat-value activo">{conSeguro}</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Sin seguro médico</span>
-          <span class="stat-value inactivo">{filasFiltradas.length - conSeguro}</span>
-        </div>
+        {#if mapeo?.seguroMedico}
+          <div class="stat-card">
+            <span class="stat-label">Con seguro médico</span>
+            <span class="stat-value activo">{conSeguro}</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Sin seguro médico</span>
+            <span class="stat-value inactivo">{filasFiltradas.length - conSeguro}</span>
+          </div>
+        {:else if resumenUnidades.length > 0}
+          <div class="stat-card">
+            <span class="stat-label">Unidades</span>
+            <span class="stat-value">{resumenUnidades.length}</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Pendientes</span>
+            <span class="stat-value inactivo">
+              {resumenUnidades.reduce((sum, u) => sum + u.pendientes, 0)}
+            </span>
+          </div>
+        {/if}
       </div>
 
       {#if tieneFiltrosRh}
         <div class="filtros-panel">
           <div class="filtros-header">
-            <h3>Filtros de RR.HH.</h3>
+            <h3>Filtros</h3>
             {#if hayFiltrosActivos}
               <button type="button" class="link" onclick={reiniciarFiltros}>Limpiar filtros</button>
             {/if}
           </div>
 
           <div class="filtros-grid">
+            {#if mapeo?.colaborador}
+              <div class="form-group">
+                <label class="label" for="filtro-colaborador">Colaborador</label>
+                <select id="filtro-colaborador" class="select" bind:value={filtros.colaborador}>
+                  <option value="">Todos</option>
+                  {#each colaboradoresDisponibles as colaborador}
+                    <option value={colaborador}>{colaborador}</option>
+                  {/each}
+                </select>
+              </div>
+            {/if}
+
+            {#if mapeo?.cliente}
+              <div class="form-group">
+                <label class="label" for="filtro-cliente">Cliente</label>
+                <select id="filtro-cliente" class="select" bind:value={filtros.cliente}>
+                  <option value="">Todos</option>
+                  {#each clientesDisponibles as cliente}
+                    <option value={cliente}>{cliente}</option>
+                  {/each}
+                </select>
+              </div>
+            {/if}
+
+            {#if mapeo?.unidad}
+              <div class="form-group">
+                <label class="label" for="filtro-unidad">Unidad</label>
+                <select id="filtro-unidad" class="select" bind:value={filtros.unidad}>
+                  <option value="">Todas las unidades</option>
+                  {#each unidadesDisponibles as unidad}
+                    <option value={unidad}>{unidad}</option>
+                  {/each}
+                </select>
+              </div>
+            {/if}
+
+            {#if mapeo?.estado}
+              <div class="form-group">
+                <label class="label" for="filtro-estado">Estado</label>
+                <select id="filtro-estado" class="select" bind:value={filtros.estado}>
+                  <option value="">Todos</option>
+                  {#each estadosDisponibles as estado}
+                    <option value={estado}>{estado}</option>
+                  {/each}
+                </select>
+              </div>
+            {/if}
+
             {#if mapeo?.puesto}
               <div class="form-group">
                 <label class="label" for="filtro-puesto">Puesto</label>
@@ -333,6 +520,42 @@
           </div>
         </div>
 
+        {#if resumenUnidades.length > 0}
+          <div class="resumen-niveles">
+            <h3>Resumen por unidad</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Unidad</th>
+                    <th>Registros</th>
+                    {#if mapeo?.sueldo}
+                      <th>Sueldo promedio</th>
+                    {/if}
+                    {#if mapeo?.estado}
+                      <th>Pendientes</th>
+                    {/if}
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each resumenUnidades as item}
+                    <tr>
+                      <td><strong>{item.unidad}</strong></td>
+                      <td>{item.registros}</td>
+                      {#if mapeo?.sueldo}
+                        <td>{item.sueldoPromedio > 0 ? formatearMoneda(item.sueldoPromedio) : '—'}</td>
+                      {/if}
+                      {#if mapeo?.estado}
+                        <td>{item.pendientes > 0 ? item.pendientes : '—'}</td>
+                      {/if}
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {/if}
+
         {#if resumenPuestos.length > 0}
           <div class="resumen-niveles">
             <h3>Sueldos por puesto</h3>
@@ -398,7 +621,7 @@
         {/if}
       {:else}
         <div class="alert alert-error">
-          No se detectaron columnas de RR.HH. Usa nombres como: Puesto, Nivel de puesto, Categoría, Tiempo en el puesto, Sueldo, Seguro de gastos médicos.
+          No se detectaron columnas reconocibles. Usa hojas como <strong>Sueldos por Unidad</strong> (Colaborador, Unidad) o <strong>Mapa Unidades</strong> (Cliente, Unidad).
         </div>
       {/if}
 
@@ -506,7 +729,8 @@
 
   .descripcion,
   .mapeo-info,
-  .ejemplo-descarga {
+  .ejemplo-descarga,
+  .columnas-preview {
     color: var(--color-text-muted);
     font-size: 0.9rem;
     margin-bottom: 1rem;
@@ -516,6 +740,17 @@
     color: var(--color-primary);
     font-weight: 600;
     text-decoration: underline;
+  }
+
+  .tipo-hoja-badge {
+    display: inline-block;
+    margin-top: 0.5rem;
+    padding: 0.2rem 0.6rem;
+    background: rgba(79, 70, 229, 0.12);
+    color: var(--color-primary);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
   }
 
   .mapeo-info {
@@ -535,6 +770,24 @@
     margin-top: 0.75rem;
     font-size: 0.875rem;
     color: var(--color-text-muted);
+  }
+
+  .selector-hojas {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  .hoja-preview {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .hoja-preview p {
+    margin-bottom: 0.35rem;
   }
 
   .reporte-header {
@@ -637,5 +890,18 @@
     border: none;
     cursor: pointer;
     font-size: 0.85rem;
+  }
+
+  .alert-info {
+    padding: 0.875rem 1rem;
+    border-radius: var(--radius);
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    font-size: 0.9rem;
+  }
+
+  .alert-info a {
+    font-weight: 600;
   }
 </style>

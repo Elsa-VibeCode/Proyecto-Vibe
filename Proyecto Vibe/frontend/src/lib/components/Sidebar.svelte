@@ -6,6 +6,8 @@
 
   const enlaces = [
     { href: '/dashboard', label: 'Panel', icon: '📊' },
+    { href: '/facturacion', label: 'Facturación', icon: '🧾' },
+    { href: '/finanzas', label: 'Finanzas', icon: '💰' },
     { href: '/usuarios', label: 'Usuarios', icon: '👥' },
     { href: '/datos-excel', label: 'Datos Excel', icon: '📑' },
     { href: '/mapa', label: 'Mapa', icon: '🗺️' },

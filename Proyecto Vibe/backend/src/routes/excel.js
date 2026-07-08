@@ -2,11 +2,15 @@ import { Router } from 'express';
 import multer from 'multer';
 import { ExcelImport } from '../models/ExcelImport.js';
 import { protegerRuta } from '../middleware/auth.js';
-import { parsearExcel, generarExcel } from '../utils/excel.js';
+import { parsearExcel, generarExcel, previsualizarLibro } from '../utils/excel.js';
 import {
   detectarColumnas,
+  detectarTipoHoja,
   filtrarFilas,
   calcularResumenNiveles,
+  calcularResumenUnidades,
+  calcularResumenFacturacion,
+  calcularResumenFinanzas,
 } from '../utils/excelFiltros.js';
 
 const router = Router();
@@ -31,15 +35,123 @@ const upload = multer({
   },
 });
 
+const TIPOS_VALIDOS = [
+  'facturacion',
+  'resumen-mensual',
+  'sueldos-unidad',
+  'mapa-unidades',
+  'rrhh',
+  'generico',
+];
+
 router.use(protegerRuta);
+
+function construirResumen(importacion, filtros = {}) {
+  const mapeo = detectarColumnas(importacion.columnas);
+  const tipoHoja = importacion.tipoHoja || detectarTipoHoja(mapeo, importacion.columnas);
+  const filasFiltradas = filtrarFilas(importacion.filas, mapeo, filtros);
+
+  const resumen = {
+    mapeo,
+    tipoHoja,
+    totalFilas: filasFiltradas.length,
+    importacion: {
+      id: importacion._id,
+      nombreArchivo: importacion.nombreArchivo,
+      nombreHoja: importacion.nombreHoja,
+      totalFilas: importacion.totalFilas,
+      createdAt: importacion.createdAt,
+    },
+  };
+
+  if (tipoHoja === 'facturacion') {
+    resumen.facturacion = calcularResumenFacturacion(filasFiltradas, mapeo);
+    resumen.filas = filasFiltradas;
+  } else if (tipoHoja === 'resumen-mensual') {
+    resumen.finanzas = calcularResumenFinanzas(filasFiltradas, importacion.columnas);
+    resumen.filas = filasFiltradas;
+  } else {
+    resumen.resumenNiveles = calcularResumenNiveles(filasFiltradas, mapeo);
+    resumen.resumenUnidades = calcularResumenUnidades(filasFiltradas, mapeo);
+    resumen.filas = filasFiltradas;
+
+    const conSeguro = filasFiltradas.filter((f) => {
+      const valor = mapeo.seguroMedico ? f[mapeo.seguroMedico] : null;
+      return ['si', 'sí', 'yes', 'true', '1', 'activo', 'incluido', 'con seguro'].includes(
+        String(valor ?? '').toLowerCase().trim()
+      );
+    }).length;
+
+    resumen.seguroMedico = {
+      conSeguro,
+      sinSeguro: filasFiltradas.length - conSeguro,
+      porcentaje: filasFiltradas.length
+        ? Math.round((conSeguro / filasFiltradas.length) * 100)
+        : 0,
+    };
+  }
+
+  return resumen;
+}
 
 router.get('/', async (req, res) => {
   const importaciones = await ExcelImport.find({ subidoPor: req.usuario._id })
-    .select('nombreArchivo nombreHoja columnas totalFilas createdAt')
+    .select('nombreArchivo nombreHoja columnas totalFilas tipoHoja createdAt')
     .sort({ createdAt: -1 })
     .limit(20);
 
   res.json({ importaciones });
+});
+
+router.get('/ultima/:tipo', async (req, res) => {
+  const tipo = req.params.tipo;
+
+  if (!TIPOS_VALIDOS.includes(tipo)) {
+    return res.status(400).json({ mensaje: 'Tipo de hoja no válido' });
+  }
+
+  const importaciones = await ExcelImport.find({
+    subidoPor: req.usuario._id,
+    tipoHoja: tipo,
+  })
+    .sort({ createdAt: -1 })
+    .limit(1);
+
+  const importacion = importaciones[0];
+
+  if (!importacion) {
+    return res.status(404).json({
+      mensaje: `No hay importaciones de tipo "${tipo}". Importa la hoja correspondiente en Datos Excel.`,
+    });
+  }
+
+  const filtros = req.query;
+  res.json(construirResumen(importacion, filtros));
+});
+
+router.post('/previsualizar', (req, res) => {
+  upload.single('archivo')(req, res, async (err) => {
+    if (err) {
+      const mensaje =
+        err instanceof multer.MulterError
+          ? 'El archivo excede el tamaño máximo permitido (10 MB)'
+          : err.message;
+      return res.status(400).json({ mensaje });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ mensaje: 'Debes seleccionar un archivo Excel' });
+    }
+
+    try {
+      const previsualizacion = previsualizarLibro(req.file.buffer);
+      res.json(previsualizacion);
+    } catch (error) {
+      return res.status(400).json({
+        mensaje: error.message || 'No se pudo previsualizar el archivo Excel',
+      });
+    }
+  });
 });
 
 router.post('/importar', (req, res) => {
@@ -57,14 +169,21 @@ router.post('/importar', (req, res) => {
     }
 
     try {
-      const { nombreHoja, columnas, filas, totalFilas } = parsearExcel(req.file.buffer);
+      const nombreHoja = req.body?.nombreHoja?.trim() || undefined;
+      const { nombreHoja: hoja, columnas, filas, totalFilas, filaEncabezado, datosEstructurados } =
+        parsearExcel(req.file.buffer, { nombreHoja });
+
+      const mapeo = detectarColumnas(columnas);
+      const tipoHoja = detectarTipoHoja(mapeo, columnas);
 
       const importacion = await ExcelImport.create({
         nombreArchivo: req.file.originalname,
-        nombreHoja,
+        nombreHoja: hoja,
         columnas,
         filas,
         totalFilas,
+        tipoHoja,
+        datosEstructurados,
         subidoPor: req.usuario._id,
       });
 
@@ -77,6 +196,9 @@ router.post('/importar', (req, res) => {
           columnas: importacion.columnas,
           filas: importacion.filas,
           totalFilas: importacion.totalFilas,
+          filaEncabezado,
+          mapeo,
+          tipoHoja,
           createdAt: importacion.createdAt,
         },
       });
@@ -86,6 +208,19 @@ router.post('/importar', (req, res) => {
       });
     }
   });
+});
+
+router.get('/:id/resumen', async (req, res) => {
+  const importacion = await ExcelImport.findOne({
+    _id: req.params.id,
+    subidoPor: req.usuario._id,
+  });
+
+  if (!importacion) {
+    return res.status(404).json({ mensaje: 'Importación no encontrada' });
+  }
+
+  res.json(construirResumen(importacion, req.query));
 });
 
 router.get('/:id/resumen-rh', async (req, res) => {
@@ -98,30 +233,7 @@ router.get('/:id/resumen-rh', async (req, res) => {
     return res.status(404).json({ mensaje: 'Importación no encontrada' });
   }
 
-  const mapeo = detectarColumnas(importacion.columnas);
-  const filtros = req.query;
-  const filasFiltradas = filtrarFilas(importacion.filas, mapeo, filtros);
-  const resumenNiveles = calcularResumenNiveles(filasFiltradas, mapeo);
-
-  const conSeguro = filasFiltradas.filter((f) => {
-    const valor = mapeo.seguroMedico ? f[mapeo.seguroMedico] : null;
-    return ['si', 'sí', 'yes', 'true', '1', 'activo', 'incluido', 'con seguro'].includes(
-      String(valor ?? '').toLowerCase().trim()
-    );
-  }).length;
-
-  res.json({
-    mapeo,
-    totalFilas: filasFiltradas.length,
-    resumenNiveles,
-    seguroMedico: {
-      conSeguro,
-      sinSeguro: filasFiltradas.length - conSeguro,
-      porcentaje: filasFiltradas.length
-        ? Math.round((conSeguro / filasFiltradas.length) * 100)
-        : 0,
-    },
-  });
+  res.json(construirResumen(importacion, req.query));
 });
 
 router.post('/:id/exportar-filtrado', async (req, res) => {
