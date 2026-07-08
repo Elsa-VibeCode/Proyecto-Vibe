@@ -322,14 +322,20 @@
     <div class="alert alert-success">{mensaje}</div>
   {/if}
 
-  {#if importacionActual && (tipoHoja === 'facturacion' || tipoHoja === 'resumen-mensual')}
+  {#if importacionActual && ['facturacion', 'resumen-mensual', 'estado-cuenta', 'estado-cuenta-flujo', 'conciliacion'].includes(tipoHoja)}
     <div class="alert alert-info">
       {#if tipoHoja === 'facturacion'}
         Datos de facturación importados. Ver el módulo completo en
         <a href="/facturacion">Facturación</a>.
-      {:else}
+      {:else if tipoHoja === 'resumen-mensual'}
         Resumen mensual importado. Ver el dashboard en
         <a href="/finanzas">Finanzas</a>.
+      {:else if tipoHoja === 'estado-cuenta' || tipoHoja === 'estado-cuenta-flujo'}
+        Estado de cuenta importado. Ver el módulo en
+        <a href="/estado-cuenta">Estado de cuenta</a>.
+      {:else if tipoHoja === 'conciliacion'}
+        Conciliación bancaria importada. Ver el módulo en
+        <a href="/conciliacion">Conciliación</a>.
       {/if}
     </div>
   {/if}

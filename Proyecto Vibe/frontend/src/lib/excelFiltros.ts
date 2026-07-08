@@ -19,6 +19,9 @@ export type TipoHoja =
   | 'mapa-unidades'
   | 'facturacion'
   | 'resumen-mensual'
+  | 'estado-cuenta'
+  | 'estado-cuenta-flujo'
+  | 'conciliacion'
   | 'rrhh'
   | 'generico';
 
@@ -206,6 +209,9 @@ export function etiquetaTipoHoja(tipo: TipoHoja): string {
     'mapa-unidades': 'Mapa de unidades',
     facturacion: 'Facturación',
     'resumen-mensual': 'Resumen mensual',
+    'estado-cuenta': 'Estado de cuenta',
+    'estado-cuenta-flujo': 'Estado de cuenta (flujo)',
+    conciliacion: 'Conciliación bancaria',
     rrhh: 'Recursos humanos',
     generico: 'Datos generales',
   };

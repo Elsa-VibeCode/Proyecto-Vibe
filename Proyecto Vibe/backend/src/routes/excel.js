@@ -11,6 +11,8 @@ import {
   calcularResumenUnidades,
   calcularResumenFacturacion,
   calcularResumenFinanzas,
+  calcularResumenEstadoCuenta,
+  calcularResumenConciliacion,
 } from '../utils/excelFiltros.js';
 
 const router = Router();
@@ -38,6 +40,9 @@ const upload = multer({
 const TIPOS_VALIDOS = [
   'facturacion',
   'resumen-mensual',
+  'estado-cuenta',
+  'estado-cuenta-flujo',
+  'conciliacion',
   'sueldos-unidad',
   'mapa-unidades',
   'rrhh',
@@ -48,7 +53,9 @@ router.use(protegerRuta);
 
 function construirResumen(importacion, filtros = {}) {
   const mapeo = detectarColumnas(importacion.columnas);
-  const tipoHoja = importacion.tipoHoja || detectarTipoHoja(mapeo, importacion.columnas);
+  const tipoHoja =
+    importacion.tipoHoja ||
+    detectarTipoHoja(mapeo, importacion.columnas, importacion.nombreHoja);
   const filasFiltradas = filtrarFilas(importacion.filas, mapeo, filtros);
 
   const resumen = {
@@ -69,6 +76,20 @@ function construirResumen(importacion, filtros = {}) {
     resumen.filas = filasFiltradas;
   } else if (tipoHoja === 'resumen-mensual') {
     resumen.finanzas = calcularResumenFinanzas(filasFiltradas, importacion.columnas);
+    resumen.filas = filasFiltradas;
+  } else if (tipoHoja === 'estado-cuenta' || tipoHoja === 'estado-cuenta-flujo') {
+    resumen.estadoCuenta = calcularResumenEstadoCuenta(
+      filasFiltradas,
+      mapeo,
+      tipoHoja === 'estado-cuenta-flujo'
+    );
+    resumen.filas = filasFiltradas;
+  } else if (tipoHoja === 'conciliacion') {
+    resumen.conciliacion = calcularResumenConciliacion(
+      filasFiltradas,
+      mapeo,
+      importacion.datosEstructurados
+    );
     resumen.filas = filasFiltradas;
   } else {
     resumen.resumenNiveles = calcularResumenNiveles(filasFiltradas, mapeo);
@@ -174,7 +195,7 @@ router.post('/importar', (req, res) => {
         parsearExcel(req.file.buffer, { nombreHoja });
 
       const mapeo = detectarColumnas(columnas);
-      const tipoHoja = detectarTipoHoja(mapeo, columnas);
+      const tipoHoja = detectarTipoHoja(mapeo, columnas, hoja);
 
       const importacion = await ExcelImport.create({
         nombreArchivo: req.file.originalname,

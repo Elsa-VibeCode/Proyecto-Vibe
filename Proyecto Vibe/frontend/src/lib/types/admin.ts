@@ -40,7 +40,50 @@ export interface ResumenModulo {
   importacion: ImportacionResumen;
   facturacion?: ResumenFacturacion;
   finanzas?: ResumenFinanzas;
+  estadoCuenta?: ResumenEstadoCuenta;
+  conciliacion?: ResumenConciliacion;
   filas?: Record<string, unknown>[];
+}
+
+export interface ResumenEstadoCuenta {
+  movimientos: number;
+  totalIngresos: number;
+  totalEgresos: number;
+  saldoFinal: number;
+  porUnidad: { unidad: string; movimientos: number; ingresos: number; egresos: number }[];
+}
+
+export interface ResumenConciliacion {
+  periodo: string;
+  saldoInicialBanco: number;
+  abonosBanco: number;
+  abonosHoja: number;
+  diferenciaAbonos: number;
+  cargosBanco: number;
+  cargosHoja: number;
+  diferenciaCargos: number;
+  saldoFinalBanco: number;
+  movimientos: number;
+  conFactura: number;
+  sinFactura: number;
+  totalCargos: number;
+  totalAbonos: number;
+}
+
+export interface FiltrosEstadoCuenta {
+  unidad: string;
+}
+
+export interface FiltrosConciliacion {
+  enFacturas: string;
+}
+
+export function filtrosEstadoCuentaVacios(): FiltrosEstadoCuenta {
+  return { unidad: '' };
+}
+
+export function filtrosConciliacionVacios(): FiltrosConciliacion {
+  return { enFacturas: '' };
 }
 
 export interface FiltrosFacturacion {

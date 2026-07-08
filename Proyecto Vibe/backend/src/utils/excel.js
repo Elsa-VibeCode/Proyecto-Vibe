@@ -40,6 +40,8 @@ const HOJAS_RECOMENDADAS = [
   'mapa unidades',
   'facturacion ingresos',
   'resumen mensual',
+  'estado de cuenta',
+  'conciliacion',
   'nomina',
   'empleados',
   'colaboradores',
@@ -243,7 +245,64 @@ function esHojaRecomendada(nombreHoja) {
   return HOJAS_RECOMENDADAS.some((patron) => norm.includes(patron));
 }
 
+function esHojaConciliacion(nombreHoja) {
+  return normalizar(nombreHoja).includes('conciliacion');
+}
+
+export function parsearConciliacion(nombreHoja, matriz) {
+  const periodo = nombreHoja.replace(/^conciliaci[oó]n\s*/i, '').trim() || nombreHoja;
+  const resumen = {};
+
+  for (let i = 0; i < Math.min(matriz.length, 15); i++) {
+    const fila = matriz[i];
+    if (!fila) continue;
+    const etiqueta = normalizar(String(fila[0] ?? ''));
+
+    if (etiqueta.includes('saldo inicial')) {
+      resumen.saldoInicialBanco = Number(String(fila[1] ?? '').replace(/[$,\s]/g, '')) || 0;
+    }
+    if (etiqueta.includes('abonos') || etiqueta.includes('ingresos')) {
+      resumen.abonosBanco = Number(String(fila[1] ?? '').replace(/[$,\s]/g, '')) || 0;
+      resumen.abonosHoja = Number(String(fila[2] ?? '').replace(/[$,\s]/g, '')) || 0;
+      resumen.diferenciaAbonos = Number(String(fila[3] ?? '').replace(/[$,\s]/g, '')) || 0;
+    }
+    if (etiqueta.includes('cargos') || etiqueta.includes('egresos')) {
+      resumen.cargosBanco = Number(String(fila[1] ?? '').replace(/[$,\s]/g, '')) || 0;
+      resumen.cargosHoja = Number(String(fila[2] ?? '').replace(/[$,\s]/g, '')) || 0;
+      resumen.diferenciaCargos = Number(String(fila[3] ?? '').replace(/[$,\s]/g, '')) || 0;
+    }
+    if (etiqueta.includes('saldo final')) {
+      resumen.saldoFinalBanco = Number(String(fila[1] ?? '').replace(/[$,\s]/g, '')) || 0;
+    }
+  }
+
+  let filaEncabezado = -1;
+  for (let i = 0; i < Math.min(matriz.length, 25); i++) {
+    if (normalizar(String(matriz[i]?.[0] ?? '')) === 'fecha') {
+      filaEncabezado = i;
+      break;
+    }
+  }
+
+  if (filaEncabezado === -1) {
+    throw new Error('No se encontró la tabla de movimientos en la conciliación');
+  }
+
+  const { columnas, filas } = construirFilasDesdeMatriz(matriz, filaEncabezado);
+
+  return {
+    filaEncabezado: filaEncabezado + 1,
+    columnas,
+    filas,
+    datosEstructurados: { periodo, resumen },
+  };
+}
+
 function parsearContenidoHoja(nombreHoja, matriz) {
+  if (esHojaConciliacion(nombreHoja)) {
+    return parsearConciliacion(nombreHoja, matriz);
+  }
+
   if (esHojaResumenMensual(nombreHoja, matriz)) {
     const resultado = parsearResumenMensual(matriz);
     return {

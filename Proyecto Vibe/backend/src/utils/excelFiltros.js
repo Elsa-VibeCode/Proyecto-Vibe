@@ -18,13 +18,25 @@ const ORDEN_CAMPOS = [
   'nivelPuesto',
   'seguroMedico',
   'fechaFacturacion',
+  'fechaMovimiento',
   'noFactura',
   'fechaPago',
+  'conceptoMovimiento',
   'conceptoFactura',
+  'contraparte',
   'areaVenta',
   'subtotal',
   'iva',
   'total',
+  'ingreso',
+  'egreso',
+  'cargo',
+  'abono',
+  'saldoTotal',
+  'saldoConsulting',
+  'saldoTechnologies',
+  'saldoGrupo',
+  'enFacturas',
   'estatusEnvio',
   'estatusPago',
   'colaborador',
@@ -39,13 +51,25 @@ const ORDEN_CAMPOS = [
 
 const PATRONES = {
   fechaFacturacion: ['fecha de facturacion', 'fecha de facturación', 'fecha facturacion'],
+  fechaMovimiento: ['fecha'],
   noFactura: ['no.factura', 'no factura', 'numero factura', 'número factura', 'folio factura'],
   fechaPago: ['fecha de pago', 'fecha pago', 'fecha de pago (ingreso)'],
+  conceptoMovimiento: ['concepto / cliente', 'concepto (banco)'],
   conceptoFactura: ['concepto'],
+  contraparte: ['contraparte / ref.', 'contraparte'],
   areaVenta: ['area de venta', 'área de venta'],
   subtotal: ['subtotal'],
   iva: ['iva'],
   total: ['total con iva', 'total'],
+  ingreso: ['ingreso'],
+  egreso: ['egreso'],
+  cargo: ['cargo'],
+  abono: ['abono'],
+  saldoTotal: ['saldo total'],
+  saldoConsulting: ['saldo consulting'],
+  saldoTechnologies: ['saldo technologies'],
+  saldoGrupo: ['saldo grupo'],
+  enFacturas: ['en facturas', '¿en facturas?'],
   estatusEnvio: ['estatus de envio', 'estatus de envío', 'estatus envio'],
   estatusPago: ['estatus de pago', 'estatus pago'],
   colaborador: ['colaborador', 'empleado', 'nombre completo', 'trabajador'],
@@ -60,7 +84,7 @@ const PATRONES = {
   unidad: ['unidad', 'unidad de negocio', 'business unit'],
   estado: ['estado', 'estatus', 'status'],
   notas: ['notas', 'nota', 'comentarios', 'observaciones'],
-  puesto: ['puesto', 'cargo', 'titulo del puesto', 'título del puesto', 'posicion', 'posición', 'job title', 'rol'],
+  puesto: ['puesto', 'titulo del puesto', 'título del puesto', 'posicion', 'posición', 'job title', 'rol'],
   nivelPuesto: ['nivel de puesto', 'nivel puesto', 'puesto nivel', 'level', 'grado', 'nivel'],
   categoria: ['categoria', 'categoría', 'category', 'departamento', 'area', 'área', 'division'],
   tiempoPuesto: [
@@ -100,13 +124,25 @@ function esColumnaMes(columna) {
 export function detectarColumnas(columnas) {
   const mapeo = {
     fechaFacturacion: null,
+    fechaMovimiento: null,
     noFactura: null,
     fechaPago: null,
     conceptoFactura: null,
+    conceptoMovimiento: null,
+    contraparte: null,
     areaVenta: null,
     subtotal: null,
     iva: null,
     total: null,
+    ingreso: null,
+    egreso: null,
+    cargo: null,
+    abono: null,
+    saldoTotal: null,
+    saldoConsulting: null,
+    saldoTechnologies: null,
+    saldoGrupo: null,
+    enFacturas: null,
     estatusEnvio: null,
     estatusPago: null,
     colaborador: null,
@@ -145,10 +181,13 @@ export function detectarColumnas(columnas) {
   return mapeo;
 }
 
-export function detectarTipoHoja(mapeo, columnas = []) {
+export function detectarTipoHoja(mapeo, columnas = [], nombreHoja = '') {
+  const normHoja = normalizar(nombreHoja);
   const tieneConcepto = columnas.some((c) => normalizar(c) === 'concepto');
   const tieneCategoria = columnas.some((c) => ['categoria', 'categoría'].includes(normalizar(c)));
   const mesesDetectados = columnas.filter((c) => esColumnaMes(c)).length;
+
+  if (normHoja.includes('conciliacion')) return 'conciliacion';
 
   if (tieneConcepto && tieneCategoria && mesesDetectados >= 2) {
     return 'resumen-mensual';
@@ -156,6 +195,21 @@ export function detectarTipoHoja(mapeo, columnas = []) {
 
   if (mapeo.noFactura && mapeo.cliente && (mapeo.subtotal || mapeo.total)) {
     return 'facturacion';
+  }
+
+  if (normHoja.includes('estado de cuenta') && normHoja.includes('flujo')) {
+    return 'estado-cuenta-flujo';
+  }
+
+  if (
+    normHoja.includes('estado de cuenta') ||
+    (mapeo.ingreso && mapeo.egreso && mapeo.saldoTotal)
+  ) {
+    return 'estado-cuenta';
+  }
+
+  if (mapeo.cargo && mapeo.abono && mapeo.saldoTotal) {
+    return 'estado-cuenta-flujo';
   }
 
   if (mapeo.colaborador && mapeo.unidad) return 'sueldos-unidad';
@@ -239,12 +293,19 @@ export function filtrarFilas(filas, mapeo, filtros = {}) {
     const tiempo = parsearTiempoMeses(obtenerValor(fila, mapeo.tiempoPuesto));
     const seguro = parsearSeguro(obtenerValor(fila, mapeo.seguroMedico));
 
+    const enFacturas = String(obtenerValor(fila, mapeo.enFacturas) ?? '').trim();
+    const ingreso = parsearNumero(obtenerValor(fila, mapeo.ingreso));
+    const egreso = parsearNumero(obtenerValor(fila, mapeo.egreso));
+    const cargo = parsearNumero(obtenerValor(fila, mapeo.cargo));
+    const abono = parsearNumero(obtenerValor(fila, mapeo.abono));
+
     if (filtros.colaborador && colaborador !== filtros.colaborador) return false;
     if (filtros.cliente && cliente !== filtros.cliente) return false;
     if (filtros.unidad && unidad !== filtros.unidad) return false;
     if (filtros.areaVenta && areaVenta !== filtros.areaVenta) return false;
     if (filtros.estatusPago && estatusPago !== filtros.estatusPago) return false;
     if (filtros.estado && estado !== filtros.estado) return false;
+    if (filtros.enFacturas && enFacturas !== filtros.enFacturas) return false;
     if (filtros.puesto && puesto !== filtros.puesto) return false;
     if (filtros.nivelPuesto && nivel !== filtros.nivelPuesto) return false;
     if (filtros.categoria && categoria !== filtros.categoria) return false;
@@ -466,4 +527,115 @@ export function calcularResumenUnidades(filas, mapeo) {
       };
     })
     .sort((a, b) => b.registros - a.registros);
+}
+
+function esFilaMovimiento(fila, mapeo) {
+  const concepto = normalizar(
+    String(obtenerValor(fila, mapeo.conceptoMovimiento) ?? obtenerValor(fila, mapeo.conceptoFactura) ?? '')
+  );
+  if (
+    concepto.includes('saldo inicial') ||
+    concepto.includes('saldo de apertura') ||
+    concepto.includes('enero 202') ||
+    concepto.includes('febrero 202') ||
+    concepto.includes('marzo 202')
+  ) {
+    return false;
+  }
+
+  const fecha = obtenerValor(fila, mapeo.fechaMovimiento);
+  const ingreso = parsearNumero(obtenerValor(fila, mapeo.ingreso));
+  const egreso = parsearNumero(obtenerValor(fila, mapeo.egreso));
+  const cargo = parsearNumero(obtenerValor(fila, mapeo.cargo));
+  const abono = parsearNumero(obtenerValor(fila, mapeo.abono));
+
+  return Boolean(fecha) || ingreso !== null || egreso !== null || cargo !== null || abono !== null;
+}
+
+export function calcularResumenEstadoCuenta(filas, mapeo, esFlujo = false) {
+  const movimientos = filas.filter((fila) => esFilaMovimiento(fila, mapeo));
+  if (movimientos.length === 0) return null;
+
+  let totalIngresos = 0;
+  let totalEgresos = 0;
+  let saldoFinal = 0;
+  const porUnidad = new Map();
+
+  for (const fila of movimientos) {
+    const unidad = String(obtenerValor(fila, mapeo.unidad) ?? 'Sin unidad').trim() || 'Sin unidad';
+    const ingreso = parsearNumero(obtenerValor(fila, mapeo.ingreso)) ?? 0;
+    const egreso = parsearNumero(obtenerValor(fila, mapeo.egreso)) ?? 0;
+    const cargo = parsearNumero(obtenerValor(fila, mapeo.cargo)) ?? 0;
+    const abono = parsearNumero(obtenerValor(fila, mapeo.abono)) ?? 0;
+    const saldo = parsearNumero(obtenerValor(fila, mapeo.saldoTotal));
+
+    const entrada = esFlujo ? abono : ingreso;
+    const salida = esFlujo ? cargo : egreso;
+
+    totalIngresos += entrada;
+    totalEgresos += salida;
+    if (saldo !== null) saldoFinal = saldo;
+
+    if (!porUnidad.has(unidad)) {
+      porUnidad.set(unidad, { movimientos: 0, ingresos: 0, egresos: 0 });
+    }
+    const grupo = porUnidad.get(unidad);
+    grupo.movimientos += 1;
+    grupo.ingresos += entrada;
+    grupo.egresos += salida;
+  }
+
+  return {
+    movimientos: movimientos.length,
+    totalIngresos: Math.round(totalIngresos),
+    totalEgresos: Math.round(totalEgresos),
+    saldoFinal: Math.round(saldoFinal),
+    porUnidad: [...porUnidad.entries()]
+      .map(([unidad, datos]) => ({
+        unidad,
+        movimientos: datos.movimientos,
+        ingresos: Math.round(datos.ingresos),
+        egresos: Math.round(datos.egresos),
+      }))
+      .sort((a, b) => b.ingresos - a.ingresos),
+  };
+}
+
+export function calcularResumenConciliacion(filas, mapeo, datosEstructurados = null) {
+  const resumenBase = datosEstructurados?.resumen ?? {};
+  const periodo = datosEstructurados?.periodo ?? '';
+
+  let sinFactura = 0;
+  let conFactura = 0;
+  let totalCargos = 0;
+  let totalAbonos = 0;
+
+  for (const fila of filas) {
+    const cargo = parsearNumero(obtenerValor(fila, mapeo.cargo)) ?? 0;
+    const abono = parsearNumero(obtenerValor(fila, mapeo.abono)) ?? 0;
+    const enFacturas = normalizar(String(obtenerValor(fila, mapeo.enFacturas) ?? ''));
+
+    totalCargos += cargo;
+    totalAbonos += abono;
+
+    if (enFacturas === 'si' || enFacturas === 'sí') conFactura += 1;
+    else if (enFacturas === 'no') sinFactura += 1;
+  }
+
+  return {
+    periodo,
+    saldoInicialBanco: Math.round(resumenBase.saldoInicialBanco ?? 0),
+    abonosBanco: Math.round(resumenBase.abonosBanco ?? 0),
+    abonosHoja: Math.round(resumenBase.abonosHoja ?? 0),
+    diferenciaAbonos: Math.round(resumenBase.diferenciaAbonos ?? 0),
+    cargosBanco: Math.round(resumenBase.cargosBanco ?? 0),
+    cargosHoja: Math.round(resumenBase.cargosHoja ?? 0),
+    diferenciaCargos: Math.round(resumenBase.diferenciaCargos ?? 0),
+    saldoFinalBanco: Math.round(resumenBase.saldoFinalBanco ?? 0),
+    movimientos: filas.length,
+    conFactura,
+    sinFactura,
+    totalCargos: Math.round(totalCargos),
+    totalAbonos: Math.round(totalAbonos),
+  };
 }
