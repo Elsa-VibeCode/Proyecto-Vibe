@@ -101,6 +101,39 @@
       </div>
     </section>
 
+    {#if fin.egresosPorUnidad && fin.egresosPorUnidad.length > 0}
+      <section class="card egresos-unidad-panel">
+        <h3>Egresos por unidad de negocio</h3>
+        <p class="subtitulo">Nómina separada por Consulting y Technologies; el pool de Grupo es el total a cubrir.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Unidad</th>
+                <th>Concepto</th>
+                {#each fin.meses as mes}
+                  <th>{mes}</th>
+                {/each}
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each fin.egresosPorUnidad as item}
+                <tr class:grupo-pool={item.unidad === 'Grupo'}>
+                  <td><strong>{item.unidad}</strong></td>
+                  <td>{item.etiqueta}</td>
+                  {#each fin.meses as mes}
+                    <td>{formatearMoneda(item.porMes[mes] ?? 0)}</td>
+                  {/each}
+                  <td><strong>{formatearMoneda(item.total)}</strong></td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {/if}
+
     <section class="card tabla-detalle">
       <h3>Resumen mensual por concepto</h3>
       <div class="table-wrap">
@@ -143,7 +176,9 @@
   .stat-label { font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; }
   .stat-value { font-size: 1.35rem; font-weight: 700; color: var(--color-primary); }
   .stat-value.negativo { color: var(--color-danger); }
-  .grafica-panel, .tabla-detalle { padding: 1rem; }
+  .grafica-panel, .tabla-detalle, .egresos-unidad-panel { padding: 1rem; }
+  .subtitulo { color: var(--color-text-muted); font-size: 0.82rem; margin: -0.35rem 0 0.75rem; }
+  .grupo-pool td { color: var(--color-text-muted); }
   h3 { font-size: 0.95rem; margin-bottom: 0.75rem; }
   .barras { display: flex; flex-direction: column; gap: 0.75rem; }
   .barra-item { display: grid; grid-template-columns: 80px 1fr 200px; gap: 0.75rem; align-items: center; }

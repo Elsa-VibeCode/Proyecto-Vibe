@@ -269,6 +269,144 @@ function obtenerValor(fila, columna) {
   return fila[columna];
 }
 
+function extraerTokensColaborador(nombre) {
+  const tokens = new Set();
+  const parentesis = nombre.match(/\(([^)]+)\)/);
+  if (parentesis) {
+    normalizar(parentesis[1])
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length >= 3)
+      .forEach((t) => tokens.add(t));
+  }
+
+  const base = nombre.replace(/\([^)]*\)/g, ' ');
+  normalizar(base)
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 3)
+    .forEach((t) => tokens.add(t));
+
+  return [...tokens];
+}
+
+export function crearMapaColaboradoresUnidad(filas, mapeo) {
+  if (!mapeo.colaborador || !mapeo.unidad) return [];
+
+  const unidadesValidas = new Set(['consulting', 'technologies', 'grupo']);
+  const entradas = [];
+
+  for (const fila of filas) {
+    const nombre = String(obtenerValor(fila, mapeo.colaborador) ?? '').trim();
+    const unidad = String(obtenerValor(fila, mapeo.unidad) ?? '').trim();
+    const nombreNorm = normalizar(nombre);
+    const unidadNorm = normalizar(unidad);
+
+    if (!nombre || !unidad || !unidadesValidas.has(unidadNorm)) continue;
+    if (unidad.includes('→') || nombre.includes('→')) continue;
+    if (
+      /^(reglas|gastos|metodo|abogado|ene|may|gastos bluegreen)/.test(nombreNorm) ||
+      nombreNorm.includes('sueldo base')
+    ) {
+      continue;
+    }
+
+    entradas.push({
+      nombre,
+      unidad,
+      tokens: extraerTokensColaborador(nombre),
+    });
+  }
+
+  return entradas;
+}
+
+function textoContieneToken(textoNorm, token) {
+  if (!token || token.length < 3) return false;
+  const partes = textoNorm.split(/[^a-z0-9]+/).filter(Boolean);
+  if (partes.includes(token)) return true;
+  if (token.length >= 5 && textoNorm.includes(token)) return true;
+  return false;
+}
+
+function buscarUnidadPorTexto(texto, mapaColaboradores) {
+  const norm = normalizar(texto);
+  if (!norm) return null;
+
+  let mejorUnidad = null;
+  let mejorScore = 0;
+
+  for (const entrada of mapaColaboradores) {
+    const nombreBase = normalizar(entrada.nombre.replace(/\([^)]*\)/g, ' ').trim());
+    if (nombreBase.length >= 8 && (norm.includes(nombreBase) || nombreBase.includes(norm))) {
+      const score = nombreBase.length + 10;
+      if (score > mejorScore) {
+        mejorScore = score;
+        mejorUnidad = entrada.unidad;
+      }
+    }
+
+    for (const token of entrada.tokens) {
+      if (textoContieneToken(norm, token)) {
+        const score = token.length;
+        if (score > mejorScore) {
+          mejorScore = score;
+          mejorUnidad = entrada.unidad;
+        }
+      }
+    }
+  }
+
+  return mejorUnidad;
+}
+
+export function clasificarUnidadMovimiento(fila, mapeo, mapaColaboradores = []) {
+  const unidadOriginal = String(obtenerValor(fila, mapeo.unidad) ?? '').trim() || 'Sin unidad';
+  if (!mapeo.unidad || mapaColaboradores.length === 0) return unidadOriginal;
+
+  const concepto = String(obtenerValor(fila, mapeo.conceptoMovimiento) ?? '');
+  const contraparte = String(obtenerValor(fila, mapeo.contraparte) ?? '');
+  const texto = `${concepto} ${contraparte}`.trim();
+  const textoNorm = normalizar(texto);
+
+  if (textoNorm.includes('representacion')) return unidadOriginal;
+  if (normalizar(unidadOriginal) !== 'grupo') return unidadOriginal;
+
+  const unidadInferida = buscarUnidadPorTexto(texto, mapaColaboradores);
+  if (!unidadInferida || normalizar(unidadInferida) === 'grupo') return unidadOriginal;
+
+  const mencionaNomina = textoNorm.includes('nomina');
+  const porConcepto = buscarUnidadPorTexto(concepto, mapaColaboradores);
+  const porContraparte = buscarUnidadPorTexto(contraparte, mapaColaboradores);
+
+  if (porConcepto || porContraparte || mencionaNomina) {
+    return unidadInferida;
+  }
+
+  return unidadOriginal;
+}
+
+export function clasificarFilasEstadoCuenta(filas, mapeo, mapaColaboradores = []) {
+  if (!mapeo.unidad || mapaColaboradores.length === 0) {
+    return { filas, reclasificados: 0 };
+  }
+
+  const colUnidad = mapeo.unidad;
+  let reclasificados = 0;
+
+  const filasClasificadas = filas.map((fila) => {
+    const unidadExcel = String(obtenerValor(fila, colUnidad) ?? '').trim();
+    const unidadEfectiva = clasificarUnidadMovimiento(fila, mapeo, mapaColaboradores);
+
+    if (unidadEfectiva !== unidadExcel) {
+      reclasificados += 1;
+      return { ...fila, [colUnidad]: unidadEfectiva, _unidadOriginal: unidadExcel };
+    }
+
+    return fila;
+  });
+
+  return { filas: filasClasificadas, reclasificados };
+}
+
 function esPagado(estatus) {
   return normalizar(String(estatus ?? '')).includes('pagad');
 }
@@ -400,6 +538,40 @@ export function calcularResumenFinanzas(filas, columnas) {
 
   const maxIngreso = Math.max(...ingresosPorMes.map((m) => m.ingresos), 1);
 
+  const filaConsulting = buscarConcepto('consulting (nomina');
+  const filaTechnologies = buscarConcepto('technologies (nomina');
+  const filaGrupoOperativo = buscarConcepto('grupo (egresos totales)');
+
+  const egresosPorUnidad = [
+    {
+      unidad: 'Consulting',
+      etiqueta: 'Nómina / distribución',
+      fila: filaConsulting,
+      total: parsearNumero(filaConsulting?.[columnaTotal]) ?? 0,
+      porMes: Object.fromEntries(
+        meses.map((mes) => [mes, parsearNumero(filaConsulting?.[mes]) ?? 0])
+      ),
+    },
+    {
+      unidad: 'Technologies',
+      etiqueta: 'Nómina',
+      fila: filaTechnologies,
+      total: parsearNumero(filaTechnologies?.[columnaTotal]) ?? 0,
+      porMes: Object.fromEntries(
+        meses.map((mes) => [mes, parsearNumero(filaTechnologies?.[mes]) ?? 0])
+      ),
+    },
+    {
+      unidad: 'Grupo',
+      etiqueta: 'Pool de egresos Grupo',
+      fila: filaGrupoOperativo,
+      total: parsearNumero(filaGrupoOperativo?.[columnaTotal]) ?? 0,
+      porMes: Object.fromEntries(
+        meses.map((mes) => [mes, parsearNumero(filaGrupoOperativo?.[mes]) ?? 0])
+      ),
+    },
+  ].filter((item) => item.fila);
+
   return {
     meses,
     columnaTotal,
@@ -410,6 +582,7 @@ export function calcularResumenFinanzas(filas, columnas) {
       ...item,
       porcentaje: Math.round((item.ingresos / maxIngreso) * 100),
     })),
+    egresosPorUnidad,
     conceptos: filas,
   };
 }
@@ -555,7 +728,7 @@ function esFilaMovimiento(fila, mapeo) {
   return Boolean(fecha) || ingreso !== null || egreso !== null || cargo !== null || abono !== null;
 }
 
-export function calcularResumenEstadoCuenta(filas, mapeo, esFlujo = false) {
+export function calcularResumenEstadoCuenta(filas, mapeo, esFlujo = false, opciones = {}) {
   const movimientos = filas.filter((fila) => esFilaMovimiento(fila, mapeo));
   if (movimientos.length === 0) return null;
 
@@ -563,9 +736,13 @@ export function calcularResumenEstadoCuenta(filas, mapeo, esFlujo = false) {
   let totalEgresos = 0;
   let saldoFinal = 0;
   const porUnidad = new Map();
+  let nominaReclasificada = 0;
 
   for (const fila of movimientos) {
     const unidad = String(obtenerValor(fila, mapeo.unidad) ?? 'Sin unidad').trim() || 'Sin unidad';
+    if (fila._unidadOriginal && fila._unidadOriginal !== unidad) {
+      nominaReclasificada += 1;
+    }
     const ingreso = parsearNumero(obtenerValor(fila, mapeo.ingreso)) ?? 0;
     const egreso = parsearNumero(obtenerValor(fila, mapeo.egreso)) ?? 0;
     const cargo = parsearNumero(obtenerValor(fila, mapeo.cargo)) ?? 0;
@@ -593,6 +770,8 @@ export function calcularResumenEstadoCuenta(filas, mapeo, esFlujo = false) {
     totalIngresos: Math.round(totalIngresos),
     totalEgresos: Math.round(totalEgresos),
     saldoFinal: Math.round(saldoFinal),
+    nominaReclasificada,
+    usaMapaSueldos: Boolean(opciones.usaMapaSueldos),
     porUnidad: [...porUnidad.entries()]
       .map(([unidad, datos]) => ({
         unidad,
@@ -600,7 +779,7 @@ export function calcularResumenEstadoCuenta(filas, mapeo, esFlujo = false) {
         ingresos: Math.round(datos.ingresos),
         egresos: Math.round(datos.egresos),
       }))
-      .sort((a, b) => b.ingresos - a.ingresos),
+      .sort((a, b) => b.egresos - a.egresos || b.ingresos - a.ingresos),
   };
 }
 

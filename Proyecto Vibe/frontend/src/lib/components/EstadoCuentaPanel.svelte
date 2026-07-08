@@ -78,6 +78,19 @@
         <strong>{resumen.importacion.nombreArchivo}</strong> · {resumen.importacion.nombreHoja}
         · {esFlujo ? 'Flujo bancario' : 'Por unidad'}
       </p>
+      {#if ec.usaMapaSueldos}
+        <p class="nota-clasificacion">
+          Nómina reclasificada por unidad usando <strong>Sueldos por Unidad</strong>
+          {#if ec.nominaReclasificada}
+            ({ec.nominaReclasificada} movimientos).
+          {/if}
+          Solo los gastos operativos de Grupo permanecen en Grupo.
+        </p>
+      {:else}
+        <p class="nota-clasificacion aviso">
+          Importa la hoja <strong>Sueldos por Unidad</strong> en Datos Excel para separar nómina de gastos de Grupo.
+        </p>
+      {/if}
     </div>
 
     <div class="stats-grid">
@@ -150,9 +163,14 @@
           </thead>
           <tbody>
             {#each resumen.filas ?? [] as fila}
-              <tr>
+              <tr class:reclasificado={fila._unidadOriginal}>
                 {#each columnasTabla() as columna}
-                  <td>{valorCelda(fila, columna)}</td>
+                  <td>
+                    {valorCelda(fila, columna)}
+                    {#if columna === resumen.mapeo?.unidad && fila._unidadOriginal}
+                      <span class="badge-reclasificado" title="Antes: {fila._unidadOriginal}">↻</span>
+                    {/if}
+                  </td>
                 {/each}
               </tr>
             {/each}
@@ -166,6 +184,10 @@
 <style>
   .modulo-contenido { display: flex; flex-direction: column; gap: 1.25rem; }
   .meta-info { padding: 0.875rem 1rem; font-size: 0.875rem; color: var(--color-text-muted); }
+  .nota-clasificacion { margin-top: 0.5rem; font-size: 0.82rem; }
+  .nota-clasificacion.aviso { color: var(--color-warning); }
+  .reclasificado { background: #f8fafc; }
+  .badge-reclasificado { margin-left: 0.25rem; color: var(--color-primary); font-size: 0.75rem; }
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; }
   .stat-card { padding: 1rem; display: flex; flex-direction: column; gap: 0.25rem; }
   .stat-label { font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; }

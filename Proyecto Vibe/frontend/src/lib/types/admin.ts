@@ -22,6 +22,12 @@ export interface ResumenFinanzas {
   netoUltimoMes: number;
   netoAcumulado: number;
   ingresosPorMes: IngresoMes[];
+  egresosPorUnidad?: {
+    unidad: string;
+    etiqueta: string;
+    total: number;
+    porMes: Record<string, number>;
+  }[];
   conceptos: Record<string, unknown>[];
 }
 
@@ -76,6 +82,8 @@ export interface ResumenEstadoCuenta {
   totalIngresos: number;
   totalEgresos: number;
   saldoFinal: number;
+  nominaReclasificada?: number;
+  usaMapaSueldos?: boolean;
   porUnidad: { unidad: string; movimientos: number; ingresos: number; egresos: number }[];
 }
 

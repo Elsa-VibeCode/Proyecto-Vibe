@@ -14,6 +14,8 @@ import {
   calcularResumenEstadoCuenta,
   calcularResumenConciliacion,
   calcularResumenAportacionesGrupo,
+  crearMapaColaboradoresUnidad,
+  clasificarFilasEstadoCuenta,
 } from '../utils/excelFiltros.js';
 
 const router = Router();
@@ -53,12 +55,43 @@ const TIPOS_VALIDOS = [
 
 router.use(protegerRuta);
 
-function construirResumen(importacion, filtros = {}) {
+async function obtenerMapaColaboradoresUnidad(usuarioId) {
+  const importacionSueldos = await ExcelImport.findOne({
+    subidoPor: usuarioId,
+    tipoHoja: 'sueldos-unidad',
+  })
+    .sort({ createdAt: -1 })
+    .select('columnas filas');
+
+  if (!importacionSueldos) return [];
+
+  const mapeoSueldos = detectarColumnas(importacionSueldos.columnas);
+  return crearMapaColaboradoresUnidad(importacionSueldos.filas, mapeoSueldos);
+}
+
+async function construirResumen(importacion, filtros = {}, usuarioId = null) {
   const mapeo = detectarColumnas(importacion.columnas);
   const tipoHoja =
     importacion.tipoHoja ||
     detectarTipoHoja(mapeo, importacion.columnas, importacion.nombreHoja);
-  const filasFiltradas = filtrarFilas(importacion.filas, mapeo, filtros);
+
+  let filasBase = importacion.filas;
+  let infoClasificacion = { reclasificados: 0, usaMapaSueldos: false };
+
+  if (
+    usuarioId &&
+    (tipoHoja === 'estado-cuenta' || tipoHoja === 'estado-cuenta-flujo')
+  ) {
+    const mapaColaboradores = await obtenerMapaColaboradoresUnidad(usuarioId);
+    const resultado = clasificarFilasEstadoCuenta(filasBase, mapeo, mapaColaboradores);
+    filasBase = resultado.filas;
+    infoClasificacion = {
+      reclasificados: resultado.reclasificados,
+      usaMapaSueldos: mapaColaboradores.length > 0,
+    };
+  }
+
+  const filasFiltradas = filtrarFilas(filasBase, mapeo, filtros);
 
   const resumen = {
     mapeo,
@@ -95,7 +128,8 @@ function construirResumen(importacion, filtros = {}) {
     resumen.estadoCuenta = calcularResumenEstadoCuenta(
       filasFiltradas,
       mapeo,
-      tipoHoja === 'estado-cuenta-flujo'
+      tipoHoja === 'estado-cuenta-flujo',
+      infoClasificacion
     );
     resumen.filas = filasFiltradas;
   } else if (tipoHoja === 'conciliacion') {
@@ -161,7 +195,7 @@ router.get('/ultima/:tipo', async (req, res) => {
   }
 
   const filtros = req.query;
-  res.json(construirResumen(importacion, filtros));
+  res.json(await construirResumen(importacion, filtros, req.usuario._id));
 });
 
 router.post('/previsualizar', (req, res) => {
@@ -255,7 +289,7 @@ router.get('/:id/resumen', async (req, res) => {
     return res.status(404).json({ mensaje: 'Importación no encontrada' });
   }
 
-  res.json(construirResumen(importacion, req.query));
+  res.json(await construirResumen(importacion, req.query, req.usuario._id));
 });
 
 router.get('/:id/resumen-rh', async (req, res) => {
@@ -268,7 +302,7 @@ router.get('/:id/resumen-rh', async (req, res) => {
     return res.status(404).json({ mensaje: 'Importación no encontrada' });
   }
 
-  res.json(construirResumen(importacion, req.query));
+  res.json(await construirResumen(importacion, req.query, req.usuario._id));
 });
 
 router.post('/:id/exportar-filtrado', async (req, res) => {
