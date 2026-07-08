@@ -13,6 +13,7 @@ import {
   calcularResumenFinanzas,
   calcularResumenEstadoCuenta,
   calcularResumenConciliacion,
+  calcularResumenAportacionesGrupo,
 } from '../utils/excelFiltros.js';
 
 const router = Router();
@@ -43,6 +44,7 @@ const TIPOS_VALIDOS = [
   'estado-cuenta',
   'estado-cuenta-flujo',
   'conciliacion',
+  'aportaciones-grupo',
   'sueldos-unidad',
   'mapa-unidades',
   'rrhh',
@@ -76,6 +78,18 @@ function construirResumen(importacion, filtros = {}) {
     resumen.filas = filasFiltradas;
   } else if (tipoHoja === 'resumen-mensual') {
     resumen.finanzas = calcularResumenFinanzas(filasFiltradas, importacion.columnas);
+    resumen.aportacionesGrupo = calcularResumenAportacionesGrupo(
+      filasFiltradas,
+      importacion.columnas,
+      importacion.nombreHoja
+    );
+    resumen.filas = filasFiltradas;
+  } else if (tipoHoja === 'aportaciones-grupo') {
+    resumen.aportacionesGrupo = calcularResumenAportacionesGrupo(
+      filasFiltradas,
+      importacion.columnas,
+      importacion.nombreHoja
+    );
     resumen.filas = filasFiltradas;
   } else if (tipoHoja === 'estado-cuenta' || tipoHoja === 'estado-cuenta-flujo') {
     resumen.estadoCuenta = calcularResumenEstadoCuenta(

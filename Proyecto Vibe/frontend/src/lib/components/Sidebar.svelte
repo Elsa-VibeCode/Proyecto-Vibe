@@ -8,6 +8,7 @@
     { href: '/dashboard', label: 'Panel', icon: '📊' },
     { href: '/facturacion', label: 'Facturación', icon: '🧾' },
     { href: '/finanzas', label: 'Finanzas', icon: '💰' },
+    { href: '/aportaciones', label: 'Aportaciones', icon: '🏛️' },
     { href: '/estado-cuenta', label: 'Estado de cuenta', icon: '🏦' },
     { href: '/conciliacion', label: 'Conciliación', icon: '🔍' },
     { href: '/usuarios', label: 'Usuarios', icon: '👥' },

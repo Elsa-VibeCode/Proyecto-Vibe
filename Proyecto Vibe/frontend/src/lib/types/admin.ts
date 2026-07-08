@@ -42,7 +42,33 @@ export interface ResumenModulo {
   finanzas?: ResumenFinanzas;
   estadoCuenta?: ResumenEstadoCuenta;
   conciliacion?: ResumenConciliacion;
+  aportacionesGrupo?: ResumenAportacionesGrupo;
   filas?: Record<string, unknown>[];
+}
+
+export interface MesAportacion {
+  mes: string;
+  egresosGrupo: number;
+  aporte10Consulting: number;
+  gapPorCubrir: number;
+  aporteConsulting: number;
+  aporteTechnologies: number;
+  consumoGrupo: number;
+  porcentajeCobertura: number;
+  faltantePorCubrir: number;
+}
+
+export interface ResumenAportacionesGrupo {
+  fuente: string;
+  meses: string[];
+  mesActual: string;
+  historialMensual: MesAportacion[];
+  actual: MesAportacion | null;
+  porUnidad: {
+    unidad: string;
+    color: string;
+    historial: { mes: string; monto: number }[];
+  }[];
 }
 
 export interface ResumenEstadoCuenta {

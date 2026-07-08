@@ -189,7 +189,10 @@ export function detectarTipoHoja(mapeo, columnas = [], nombreHoja = '') {
 
   if (normHoja.includes('conciliacion')) return 'conciliacion';
 
+  if (normHoja.includes('aportaciones')) return 'aportaciones-grupo';
+
   if (tieneConcepto && tieneCategoria && mesesDetectados >= 2) {
+    if (normHoja.includes('resumen mensual')) return 'resumen-mensual';
     return 'resumen-mensual';
   }
 
@@ -637,5 +640,150 @@ export function calcularResumenConciliacion(filas, mapeo, datosEstructurados = n
     sinFactura,
     totalCargos: Math.round(totalCargos),
     totalAbonos: Math.round(totalAbonos),
+  };
+}
+
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+function esColumnaMesOCorto(columna) {
+  const norm = normalizar(columna);
+  if (['concepto', 'categoria', 'categoría', 'total'].includes(norm)) return false;
+  return esColumnaMes(columna) || MESES_CORTOS.some((m) => norm.startsWith(m));
+}
+
+function detectarMesActualColumna(columnas) {
+  const nombresLargos = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+  ];
+
+  const ahora = new Date(
+    new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' })
+  );
+  const mesIdx = ahora.getMonth();
+  const largo = nombresLargos[mesIdx];
+  const corto = MESES_CORTOS[mesIdx];
+
+  const encontrada = columnas.find((c) => {
+    const n = normalizar(c);
+    return n.includes(largo) || n.startsWith(corto);
+  });
+
+  if (encontrada) return encontrada;
+
+  const meses = columnas.filter((c) => esColumnaMesOCorto(c));
+  return meses[meses.length - 1] ?? '';
+}
+
+function buscarConcepto(filas, ...patrones) {
+  for (const patron of patrones) {
+    const fila = filas.find((f) =>
+      normalizar(String(f.Concepto ?? '')).includes(normalizar(patron))
+    );
+    if (fila) return fila;
+  }
+  return null;
+}
+
+function porcentajeDesdeValor(valor) {
+  const numero = parsearNumero(valor);
+  if (numero === null) return 0;
+  return numero <= 1.5 ? Math.round(numero * 100) : Math.round(numero);
+}
+
+export function calcularResumenAportacionesGrupo(filas, columnas, nombreHoja = '') {
+  const esHistorico = normalizar(nombreHoja).includes('aportaciones');
+  const meses = columnas.filter((c) => esColumnaMesOCorto(c));
+
+  const egresosGrupo = buscarConcepto(
+    filas,
+    'egresos grupo del mes',
+    'egresos de grupo a cubrir',
+    'egresos de grupo del mes'
+  );
+  const aporte10Consulting = buscarConcepto(
+    filas,
+    '10% de facturación consulting',
+    '10% de facturacion consulting'
+  );
+  const gap = buscarConcepto(filas, 'gap =', 'gap');
+  const aporteConsulting = buscarConcepto(
+    filas,
+    'consulting — aportó',
+    'consulting - aporto',
+    'aporta consulting'
+  );
+  const aporteTech = buscarConcepto(
+    filas,
+    'technologies — aportó',
+    'technologies - aporto',
+    'aporta technologies'
+  );
+  const consumoGrupo = buscarConcepto(filas, 'grupo — consumió', 'grupo - consumio');
+  const porcentajeCobertura = buscarConcepto(filas, '% cobertura');
+
+  const historialMensual = meses.map((mes) => {
+    const egresos = parsearNumero(egresosGrupo?.[mes]) ?? 0;
+    const consulting = parsearNumero(aporteConsulting?.[mes]) ?? 0;
+    const technologies = parsearNumero(aporteTech?.[mes]) ?? 0;
+    const aporte10 = parsearNumero(aporte10Consulting?.[mes]) ?? 0;
+    const gapValor =
+      parsearNumero(gap?.[mes]) ?? Math.max(0, Math.round(egresos - aporte10));
+    const consumo = parsearNumero(consumoGrupo?.[mes]) ?? 0;
+    const cobertura =
+      porcentajeCobertura !== null
+        ? porcentajeDesdeValor(porcentajeCobertura?.[mes])
+        : egresos > 0
+          ? Math.round(((Math.max(0, consulting) + Math.max(0, technologies)) / egresos) * 100)
+          : 0;
+
+    const esProyeccion = normalizar(mes).includes('proy');
+    const aportesPositivos = Math.max(0, consulting) + Math.max(0, technologies);
+    const faltanteReal = Math.max(0, Math.round(egresos - aportesPositivos));
+    const faltantePorCubrir =
+      esProyeccion && gapValor > 0 ? Math.round(gapValor) : faltanteReal;
+
+    return {
+      mes,
+      egresosGrupo: Math.round(egresos),
+      aporte10Consulting: Math.round(aporte10),
+      gapPorCubrir: Math.round(gapValor),
+      aporteConsulting: Math.round(consulting),
+      aporteTechnologies: Math.round(technologies),
+      consumoGrupo: Math.round(Math.abs(consumo)),
+      porcentajeCobertura: cobertura,
+      faltantePorCubrir,
+    };
+  });
+
+  const mesActual = detectarMesActualColumna(columnas);
+  const actual =
+    historialMensual.find((h) => h.mes === mesActual) ??
+    historialMensual[historialMensual.length - 1] ??
+    null;
+
+  return {
+    fuente: esHistorico ? 'aportaciones-historicas' : 'resumen-mensual',
+    meses,
+    mesActual: actual?.mes ?? mesActual,
+    historialMensual,
+    actual,
+    porUnidad: [
+      {
+        unidad: 'Consulting',
+        color: '#4f46e5',
+        historial: historialMensual.map((h) => ({ mes: h.mes, monto: h.aporteConsulting })),
+      },
+      {
+        unidad: 'Technologies',
+        color: '#0891b2',
+        historial: historialMensual.map((h) => ({ mes: h.mes, monto: h.aporteTechnologies })),
+      },
+      {
+        unidad: 'Grupo',
+        color: '#dc2626',
+        historial: historialMensual.map((h) => ({ mes: h.mes, monto: h.egresosGrupo })),
+      },
+    ],
   };
 }

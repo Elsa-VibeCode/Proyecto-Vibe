@@ -35,11 +35,14 @@ const MESES = [
   'total',
 ];
 
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
 const HOJAS_RECOMENDADAS = [
   'sueldos por unidad',
   'mapa unidades',
   'facturacion ingresos',
   'resumen mensual',
+  'aportaciones',
   'estado de cuenta',
   'conciliacion',
   'nomina',
@@ -70,11 +73,15 @@ function limpiarNombreColumna(valor, indice) {
 
 function esMes(valor) {
   const norm = normalizar(valor);
-  return MESES.includes(norm) || /^\d{4}-\d{2}$/.test(norm) || norm === 'total' || /^\d{4}$/.test(norm);
+  if (MESES.includes(norm)) return true;
+  if (MESES_CORTOS.some((m) => norm.startsWith(m))) return true;
+  if (norm.includes('proy')) return true;
+  return /^\d{4}-\d{2}$/.test(norm) || norm === 'total' || /^\d{4}$/.test(norm);
 }
 
-export function esHojaResumenMensual(nombreHoja, matriz) {
+export function esHojaMatrizMensual(nombreHoja, matriz) {
   if (normalizar(nombreHoja).includes('resumen mensual')) return true;
+  if (normalizar(nombreHoja).includes('aportaciones')) return true;
 
   for (const fila of matriz.slice(0, 8)) {
     if (!fila) continue;
@@ -83,6 +90,10 @@ export function esHojaResumenMensual(nombreHoja, matriz) {
   }
 
   return false;
+}
+
+export function esHojaResumenMensual(nombreHoja, matriz) {
+  return esHojaMatrizMensual(nombreHoja, matriz);
 }
 
 export function parsearResumenMensual(matriz) {
@@ -303,7 +314,7 @@ function parsearContenidoHoja(nombreHoja, matriz) {
     return parsearConciliacion(nombreHoja, matriz);
   }
 
-  if (esHojaResumenMensual(nombreHoja, matriz)) {
+  if (esHojaMatrizMensual(nombreHoja, matriz)) {
     const resultado = parsearResumenMensual(matriz);
     return {
       filaEncabezado: 1,
