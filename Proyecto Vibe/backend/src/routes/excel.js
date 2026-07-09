@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { ExcelImport } from '../models/ExcelImport.js';
 import { protegerRuta } from '../middleware/auth.js';
+import { parsearExcel, generarExcel, previsualizarLibro } from '../utils/excel.js';
 import { MapaUnidad } from '../models/MapaUnidad.js';
 import {
   enriquecerFilasFacturacion,
