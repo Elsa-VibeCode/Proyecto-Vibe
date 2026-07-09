@@ -212,7 +212,11 @@ export function clasificarPagoNomina(pago, indice) {
     };
   }
 
-  if (colaborador.tipoRelacion === 'empleado' || colaborador.tipoRelacion === 'honorarios_externos') {
+  if (
+    colaborador.tipoRelacion === 'colaborador' ||
+    colaborador.tipoRelacion === 'empleado' ||
+    colaborador.tipoRelacion === 'honorarios_externos'
+  ) {
     const base = clasificarEmpleadoOExterno(colaborador);
     return { colaboradorId: colaborador._id, ...base, montoClasificadoBase: monto };
   }

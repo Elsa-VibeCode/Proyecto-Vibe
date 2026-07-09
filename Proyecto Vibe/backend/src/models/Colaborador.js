@@ -27,7 +27,7 @@ const colaboradorSchema = new mongoose.Schema(
     },
     tipoRelacion: {
       type: String,
-      enum: ['socio', 'empleado', 'honorarios_externos'],
+      enum: ['socio', 'colaborador', 'honorarios_externos'],
       required: true,
     },
     reglasSueldo: { type: [reglaSueldoSchema], default: [] },

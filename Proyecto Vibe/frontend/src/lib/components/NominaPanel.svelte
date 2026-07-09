@@ -24,7 +24,7 @@
   let guardando = $state(false);
   let formNombre = $state('');
   let formUnidad = $state<Colaborador['unidadBase']>('Consulting');
-  let formTipo = $state<Colaborador['tipoRelacion']>('empleado');
+  let formTipo = $state<Colaborador['tipoRelacion']>('colaborador');
   let formNotas = $state('');
 
   let puedeEditar = $derived($auth.usuario?.rol === 'admin' || $auth.usuario?.rol === 'editor');
@@ -103,10 +103,10 @@
     return 'sin-clasificar';
   }
 
-  function etiquetaTipo(tipo: Colaborador['tipoRelacion']): string {
+  function etiquetaTipo(tipo: Colaborador['tipoRelacion'] | 'empleado'): string {
     if (tipo === 'honorarios_externos') return 'Honorarios externos';
     if (tipo === 'socio') return 'Socio';
-    return 'Empleado';
+    return 'Colaborador';
   }
 
   function abrirCrear() {
@@ -114,7 +114,7 @@
     editandoId = '';
     formNombre = '';
     formUnidad = 'Consulting';
-    formTipo = 'empleado';
+    formTipo = 'colaborador';
     formNotas = '';
     modalAbierto = true;
   }
@@ -321,7 +321,7 @@
         <div>
           <h3>Catálogo de personas</h3>
           <p class="subtitulo">
-            Socios y empleados para nómina. Los honorarios externos (ej. abogado) van aparte — no son colaboradores internos.
+            Socios y colaboradores para nómina. Los honorarios externos (ej. abogado) van aparte — no son colaboradores internos de plantilla.
           </p>
         </div>
         {#if puedeEditar}
@@ -330,7 +330,7 @@
       </section>
 
       <section class="card">
-        <h4>Socios y empleados ({internos.length})</h4>
+        <h4>Socios y colaboradores ({internos.length})</h4>
         <div class="table-wrap">
           <table>
             <thead>
@@ -405,7 +405,7 @@
       <label class="label" for="nom-tipo">Tipo</label>
       <select id="nom-tipo" class="select" bind:value={formTipo}>
         <option value="socio">Socio</option>
-        <option value="empleado">Empleado</option>
+        <option value="colaborador">Colaborador</option>
         <option value="honorarios_externos">Honorarios externos</option>
       </select>
     </div>

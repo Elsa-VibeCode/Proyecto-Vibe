@@ -1,5 +1,5 @@
 /** @typedef {'Consulting'|'Technologies'|'Grupo'} Unidad */
-/** @typedef {'socio'|'empleado'|'honorarios_externos'} TipoRelacion */
+/** @typedef {'socio'|'colaborador'|'honorarios_externos'} TipoRelacion */
 
 /**
  * @type {Array<[string, Unidad, TipoRelacion, string, Array<object>|null]>}
@@ -71,13 +71,13 @@ export const COLABORADORES_SEED = [
     'Abogado del Grupo — honorarios externos, siempre Grupo (no es colaborador interno)',
     [],
   ],
-  ['Ana Paula Méndez Salcedo', 'Consulting', 'empleado', 'Nómina / gastos de viaje / comisiones', []],
-  ['César Ulises Elías Ogaz', 'Consulting', 'empleado', 'Nómina / comisiones', []],
-  ['Luis Fernando Pérez Nájera', 'Technologies', 'empleado', 'Nómina', []],
-  ['Pamela Guizar Mendoza', 'Technologies', 'empleado', 'Nómina', []],
-  ['Larissa Gabriela Bolívar Vázquez', 'Technologies', 'empleado', 'Nómina', []],
-  ['Adrián Apolinar Pacheco Franco', 'Technologies', 'empleado', 'Nómina', []],
-  ['Eduardo Curiel Pérez', 'Technologies', 'empleado', 'Nómina / comisiones', []],
+  ['Ana Paula Méndez Salcedo', 'Consulting', 'colaborador', 'Nómina / gastos de viaje / comisiones', []],
+  ['César Ulises Elías Ogaz', 'Consulting', 'colaborador', 'Nómina / comisiones', []],
+  ['Luis Fernando Pérez Nájera', 'Technologies', 'colaborador', 'Nómina', []],
+  ['Pamela Guizar Mendoza', 'Technologies', 'colaborador', 'Nómina', []],
+  ['Larissa Gabriela Bolívar Vázquez', 'Technologies', 'colaborador', 'Nómina', []],
+  ['Adrián Apolinar Pacheco Franco', 'Technologies', 'colaborador', 'Nómina', []],
+  ['Eduardo Curiel Pérez', 'Technologies', 'colaborador', 'Nómina / comisiones', []],
   ['Roberto Bernádez', 'Consulting', 'socio', 'Socio agregado', []],
   ['Antonio Fernández (Tony)', 'Consulting', 'socio', '', []],
 ];

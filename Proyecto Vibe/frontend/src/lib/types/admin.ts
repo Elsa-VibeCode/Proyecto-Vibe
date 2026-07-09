@@ -55,7 +55,7 @@ export interface Colaborador {
   _id: string;
   nombre: string;
   unidadBase: 'Consulting' | 'Technologies' | 'Grupo';
-  tipoRelacion: 'socio' | 'empleado' | 'honorarios_externos';
+  tipoRelacion: 'socio' | 'colaborador' | 'honorarios_externos';
   reglasSueldo?: ReglaSueldo[];
   notas?: string;
 }

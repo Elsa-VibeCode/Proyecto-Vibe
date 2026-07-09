@@ -21,6 +21,8 @@ export async function upsertColaborador(datos, usuarioId = null) {
 }
 
 export async function sembrarColaboradores(usuarioId = null) {
+  await Colaborador.updateMany({ tipoRelacion: 'empleado' }, { $set: { tipoRelacion: 'colaborador' } });
+
   let sembrados = 0;
   let actualizados = 0;
 
