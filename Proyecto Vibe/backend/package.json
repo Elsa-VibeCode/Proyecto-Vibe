@@ -8,7 +8,8 @@
     "start": "node src/index.js",
     "dev": "node --env-file=.env --watch src/index.js",
     "seed": "node --env-file=.env src/seed.js",
-    "seed:mapas": "node --env-file=.env src/seedMapas.js"
+    "seed:mapas": "node --env-file=.env src/seedMapas.js",
+    "users:promote": "node --env-file=.env src/scripts/promoteUser.js"
   },
   "dependencies": {
     "@clerk/backend": "^3.8.3",

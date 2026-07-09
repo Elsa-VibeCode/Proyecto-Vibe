@@ -130,6 +130,15 @@
     if (fila.estadoClasificacion === 'por_confirmar') return 'por-confirmar';
     return 'confirmada';
   }
+
+  function nombreClienteFila(fila: Record<string, unknown>): string {
+    const col = resumen?.mapeo.cliente;
+    return col ? String(fila[col] ?? '').trim() : '';
+  }
+
+  let haySinClasificar = $derived(
+    (resumen?.filas ?? []).some((f) => f.estadoClasificacion === 'no_encontrado')
+  );
 </script>
 
 {#if cargando}
@@ -165,6 +174,30 @@
         {/if}
       {/if}
     </div>
+
+    {#if puedeEditar}
+      <section class="card ayuda-editor">
+        <h3>Cómo editar como Editor</h3>
+        <ul>
+          <li>
+            <strong>Cambiar unidad</strong> (Consulting, Technologies, Grupo): ve a
+            <a href="/clasificacion">Clasificación</a> → pestaña Clientes →
+            <em>Agregar entrada</em> o <em>Editar</em> el cliente. Luego pulsa
+            <strong>Reclasificar pendientes</strong> aquí arriba.
+          </li>
+          <li>
+            <strong>Estatus de pago</strong> (Pagado / Pendiente): no se edita en esta pantalla;
+            actualiza el Excel y vuelve a importarlo en <a href="/datos-excel">Datos Excel</a>.
+          </li>
+        </ul>
+        {#if haySinClasificar}
+          <p class="aviso-sin-clasificar">
+            Hay facturas sin clasificar. El nombre del cliente en Facturación debe coincidir con el
+            mapa en Clasificación (ej. <em>ACHIEVEMENT SERVIDOR</em> ≠ <em>BLUEWOLF ACHIEVEMENT</em>).
+          </p>
+        {/if}
+      </section>
+    {/if}
 
     <div class="stats-grid">
       <div class="stat-card card">
@@ -337,6 +370,11 @@
               <tr class:sin-clasificar={fila.estadoClasificacion === 'no_encontrado'}>
                 <td>
                   <span class="badge-clasif {claseBadge(fila)}">{etiquetaClasificacion(fila)}</span>
+                  {#if puedeEditar && fila.estadoClasificacion === 'no_encontrado'}
+                    <a class="link-clasificar" href="/clasificacion" title="Agregar cliente al mapa">
+                      Clasificar →
+                    </a>
+                  {/if}
                 </td>
                 {#each columnasTabla() as columna}
                   <td>{valorCelda(fila, columna)}</td>
@@ -352,6 +390,11 @@
 
 <style>
   .modulo-contenido { display: flex; flex-direction: column; gap: 1.25rem; }
+  .ayuda-editor { padding: 1rem 1.1rem; font-size: 0.875rem; }
+  .ayuda-editor h3 { font-size: 0.9rem; margin-bottom: 0.5rem; }
+  .ayuda-editor ul { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem; }
+  .aviso-sin-clasificar { margin: 0.65rem 0 0; color: var(--color-warning); font-size: 0.82rem; }
+  .link-clasificar { display: block; margin-top: 0.25rem; font-size: 0.75rem; font-weight: 600; color: var(--color-primary); }
   .meta-info { padding: 0.875rem 1rem; font-size: 0.875rem; color: var(--color-text-muted); }
   .clasificacion-meta { margin-top: 0.35rem; }
   .clasificacion-meta .alerta { color: var(--color-danger); }

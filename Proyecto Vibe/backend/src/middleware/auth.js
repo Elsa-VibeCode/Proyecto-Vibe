@@ -2,11 +2,16 @@ import crypto from 'node:crypto';
 import { verifyToken } from '@clerk/backend';
 import { User } from '../models/User.js';
 import { getClerkClient } from '../utils/clerk.js';
+import { aplicarRolPorEmail, rolPorEmail } from '../utils/rolesConfig.js';
 
 async function sincronizarUsuario(clerkUserId) {
   let usuario = await User.findOne({ clerkId: clerkUserId });
 
-  if (usuario) return usuario;
+  if (usuario) {
+    aplicarRolPorEmail(usuario);
+    if (usuario.isModified('rol')) await usuario.save();
+    return usuario;
+  }
 
   const clerkUser = await getClerkClient().users.getUser(clerkUserId);
   const email = clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
@@ -26,16 +31,19 @@ async function sincronizarUsuario(clerkUserId) {
         clerkUser.username ||
         email.split('@')[0];
     }
+    aplicarRolPorEmail(usuario);
     await usuario.save();
     return usuario;
   }
+
+  const rolInicial = rolPorEmail(email) ?? 'visor';
 
   return User.create({
     clerkId: clerkUserId,
     email,
     nombre: clerkUser.firstName || clerkUser.username || email.split('@')[0],
     password: crypto.randomBytes(32).toString('hex'),
-    rol: email === 'admin@ejemplo.com' ? 'admin' : 'visor',
+    rol: rolInicial,
   });
 }
 
@@ -59,6 +67,10 @@ export async function protegerRuta(req, res, next) {
 
     const clerkUserId = payload.sub;
     const usuario = await sincronizarUsuario(clerkUserId);
+    aplicarRolPorEmail(usuario);
+    if (usuario.isModified('rol')) {
+      await usuario.save();
+    }
 
     if (!usuario.activo) {
       return res.status(401).json({ mensaje: 'Usuario no válido o inactivo' });
