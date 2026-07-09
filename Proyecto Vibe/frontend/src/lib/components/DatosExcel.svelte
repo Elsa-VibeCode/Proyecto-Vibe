@@ -322,7 +322,7 @@
     <div class="alert alert-success">{mensaje}</div>
   {/if}
 
-  {#if importacionActual && ['facturacion', 'resumen-mensual', 'aportaciones-grupo', 'estado-cuenta', 'estado-cuenta-flujo', 'conciliacion'].includes(tipoHoja)}
+  {#if importacionActual && ['facturacion', 'resumen-mensual', 'aportaciones-grupo', 'estado-cuenta', 'estado-cuenta-flujo', 'conciliacion', 'nomina-real'].includes(tipoHoja)}
     <div class="alert alert-info">
       {#if tipoHoja === 'facturacion'}
         Datos de facturación importados. Ver el módulo completo en
@@ -339,6 +339,9 @@
       {:else if tipoHoja === 'conciliacion'}
         Conciliación bancaria importada. Ver el módulo en
         <a href="/conciliacion">Conciliación</a>.
+      {:else if tipoHoja === 'nomina-real'}
+        Nómina Real importada y pagos sincronizados. Ver en
+        <a href="/nomina">Nómina por unidad</a>.
       {/if}
     </div>
   {/if}

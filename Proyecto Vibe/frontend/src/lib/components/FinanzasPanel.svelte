@@ -104,7 +104,10 @@
     {#if fin.egresosPorUnidad && fin.egresosPorUnidad.length > 0}
       <section class="card egresos-unidad-panel">
         <h3>Egresos por unidad de negocio</h3>
-        <p class="subtitulo">Nómina separada por Consulting y Technologies; el pool de Grupo es el total a cubrir.</p>
+        <p class="subtitulo">
+          Nómina separada por Consulting y Technologies; el pool de Grupo es el total a cubrir.
+          <a href="/nomina">Ver nómina clasificada por pago →</a>
+        </p>
         <div class="table-wrap">
           <table>
             <thead>

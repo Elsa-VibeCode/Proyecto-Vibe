@@ -187,6 +187,8 @@ export function detectarTipoHoja(mapeo, columnas = [], nombreHoja = '') {
   const tieneCategoria = columnas.some((c) => ['categoria', 'categoría'].includes(normalizar(c)));
   const mesesDetectados = columnas.filter((c) => esColumnaMes(c)).length;
 
+  if (normHoja.includes('nomina real')) return 'nomina-real';
+
   if (normHoja.includes('conciliacion')) return 'conciliacion';
 
   if (normHoja.includes('aportaciones')) return 'aportaciones-grupo';

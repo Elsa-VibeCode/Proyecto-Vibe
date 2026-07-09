@@ -42,6 +42,62 @@ export interface MapaProveedor {
   actualizadoEn?: string;
 }
 
+export interface ReglaSueldo {
+  _id?: string;
+  vigenciaDesde: string;
+  vigenciaHasta?: string | null;
+  tipo: 'sueldo_fijo' | 'por_proyecto';
+  montoTope?: number | null;
+  notas?: string;
+}
+
+export interface Colaborador {
+  _id: string;
+  nombre: string;
+  unidadBase: 'Consulting' | 'Technologies' | 'Grupo';
+  tipoRelacion: 'socio' | 'empleado' | 'honorarios_externos';
+  reglasSueldo?: ReglaSueldo[];
+  notas?: string;
+}
+
+export interface NominaPago {
+  _id: string;
+  colaborador: string;
+  monto: number;
+  fecha: string;
+  periodo: string;
+  concepto?: string;
+  responsableTransferencia?: string;
+  unidadClasificada: 'Consulting' | 'Technologies' | 'Grupo' | 'sin_clasificar';
+  estadoClasificacion: 'auto_confirmado' | 'excede_tope_revisar' | 'no_encontrado';
+  montoClasificadoBase?: number;
+  montoExcedente?: number;
+}
+
+export interface ResumenClasificacionNomina {
+  total: number;
+  autoConfirmado: number;
+  excedeTopeRevisar: number;
+  noEncontrado: number;
+  montoTotal: number;
+  montoExcedente: number;
+  montoPorUnidad: Record<string, number>;
+}
+
+export interface ResumenNominaMensual {
+  meses: string[];
+  porUnidad: { unidad: string; porMes: Record<string, number>; total: number }[];
+  totalPorMes: Record<string, number>;
+  granTotal: number;
+}
+
+export interface ResumenNomina {
+  pagos: NominaPago[];
+  clasificacion: ResumenClasificacionNomina;
+  resumenMensual: ResumenNominaMensual;
+  total: number;
+}
+
 export interface IngresoMes {
   mes: string;
   ingresos: number;

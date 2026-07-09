@@ -9,6 +9,7 @@
     { href: '/facturacion', label: 'Facturación', icon: '🧾' },
     { href: '/clasificacion', label: 'Clasificación', icon: '🏷️' },
     { href: '/finanzas', label: 'Finanzas', icon: '💰' },
+    { href: '/nomina', label: 'Nómina', icon: '👥' },
     { href: '/aportaciones', label: 'Aportaciones', icon: '🏛️' },
     { href: '/estado-cuenta', label: 'Estado de cuenta', icon: '🏦' },
     { href: '/conciliacion', label: 'Conciliación', icon: '🔍' },

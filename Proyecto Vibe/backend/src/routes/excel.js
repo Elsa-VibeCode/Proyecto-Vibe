@@ -8,6 +8,7 @@ import {
   asegurarMapaUnidadesDisponible,
   sincronizarMapaUnidadesDesdeFilas,
 } from '../services/mapaSync.js';
+import { sincronizarPagosDesdeImportacion } from '../services/nominaService.js';
 import {
   enriquecerFilasFacturacion,
   resumenClasificacionFacturacion,
@@ -60,6 +61,7 @@ const TIPOS_VALIDOS = [
   'aportaciones-grupo',
   'sueldos-unidad',
   'mapa-unidades',
+  'nomina-real',
   'rrhh',
   'generico',
 ];
@@ -349,8 +351,14 @@ router.post('/importar', (req, res) => {
         await importacion.save();
       }
 
+      let syncNomina = null;
+      if (tipoHoja === 'nomina-real') {
+        syncNomina = await sincronizarPagosDesdeImportacion(importacion, req.usuario._id);
+      }
+
       res.status(201).json({
         mensaje: 'Archivo importado correctamente',
+        syncNomina,
         importacion: {
           id: importacion._id,
           nombreArchivo: importacion.nombreArchivo,

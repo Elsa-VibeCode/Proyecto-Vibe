@@ -23,6 +23,7 @@ export type TipoHoja =
   | 'estado-cuenta'
   | 'estado-cuenta-flujo'
   | 'conciliacion'
+  | 'nomina-real'
   | 'rrhh'
   | 'generico';
 
@@ -214,6 +215,7 @@ export function etiquetaTipoHoja(tipo: TipoHoja): string {
     'estado-cuenta': 'Estado de cuenta',
     'estado-cuenta-flujo': 'Estado de cuenta (flujo)',
     conciliacion: 'Conciliación bancaria',
+    'nomina-real': 'Nómina Real (pagos por quincena)',
     rrhh: 'Recursos humanos',
     generico: 'Datos generales',
   };

@@ -1,0 +1,19 @@
+<script lang="ts">
+  import NominaPanel from '$lib/components/NominaPanel.svelte';
+</script>
+
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Nómina por unidad</h1>
+      <p>Clasificación de sueldos, honorarios y comisiones por Consulting, Technologies y Grupo</p>
+    </div>
+  </header>
+  <NominaPanel />
+</div>
+
+<style>
+  .page-header { margin-bottom: 1.5rem; }
+  .page-header h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+  .page-header p { color: var(--color-text-muted); font-size: 0.9rem; }
+</style>
