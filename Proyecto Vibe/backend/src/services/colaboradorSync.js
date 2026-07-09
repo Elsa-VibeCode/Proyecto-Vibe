@@ -11,7 +11,7 @@ export async function upsertColaborador(datos, usuarioId = null) {
   const tipoNomina =
     datos.tipoNomina ?? inferirTipoNomina(datos.unidadBase, datos.tipoRelacion);
 
-  const doc = await Colaborador.findOneAndUpdate(
+  return Colaborador.findOneAndUpdate(
     { nombreNormalizado: normalizarClave(nombre) },
     {
       nombre,
@@ -23,42 +23,51 @@ export async function upsertColaborador(datos, usuarioId = null) {
     },
     { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
   );
-
-  if (doc.reglasSueldo) {
-    doc.reglasSueldo = undefined;
-    await doc.save();
-  }
-
-  return doc;
 }
 
-export async function sembrarColaboradores(usuarioId = null) {
+async function ejecutarMigracionesNomina() {
   await Colaborador.updateMany({ tipoRelacion: 'empleado' }, { $set: { tipoRelacion: 'colaborador' } });
   await Colaborador.updateMany({}, { $unset: { reglasSueldo: '' } });
   await NominaPago.updateMany(
     { estadoClasificacion: 'excede_tope_revisar' },
     { $set: { estadoClasificacion: 'auto_confirmado' }, $unset: { montoExcedente: '' } }
   );
+}
+
+/**
+ * Sincroniza el catálogo inicial. Con forzarSeed=false (uso automático) solo inserta
+ * personas que aún no existen, sin sobrescribir tipoNomina ni otros campos editados en UI.
+ */
+export async function sembrarColaboradores(usuarioId = null, { forzarSeed = true } = {}) {
+  await ejecutarMigracionesNomina();
 
   let sembrados = 0;
   let actualizados = 0;
+  let omitidos = 0;
 
   for (const [nombre, unidadBase, tipoRelacion, tipoNomina, notas] of COLABORADORES_SEED) {
     const key = normalizarClave(nombre);
     const existia = await Colaborador.exists({ nombreNormalizado: key });
+
+    if (existia && !forzarSeed) {
+      omitidos += 1;
+      continue;
+    }
+
     await upsertColaborador(
       { nombre, unidadBase, tipoRelacion, tipoNomina, notas },
       usuarioId
     );
+
     if (existia) actualizados += 1;
     else sembrados += 1;
   }
 
-  return { sembrados, actualizados, total: COLABORADORES_SEED.length };
+  return { sembrados, actualizados, omitidos, total: COLABORADORES_SEED.length };
 }
 
 export async function asegurarColaboradoresDisponibles(usuarioId = null) {
-  const resultado = await sembrarColaboradores(usuarioId);
+  const resultado = await sembrarColaboradores(usuarioId, { forzarSeed: false });
   const total = await Colaborador.countDocuments();
   return {
     origen: 'catalogo',

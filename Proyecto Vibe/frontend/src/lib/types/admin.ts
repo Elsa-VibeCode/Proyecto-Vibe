@@ -42,15 +42,6 @@ export interface MapaProveedor {
   actualizadoEn?: string;
 }
 
-export interface ReglaSueldo {
-  _id?: string;
-  vigenciaDesde: string;
-  vigenciaHasta?: string | null;
-  tipo: 'sueldo_fijo' | 'por_proyecto';
-  montoTope?: number | null;
-  notas?: string;
-}
-
 export type TipoNomina = 'honorarios_por_proyecto' | 'sueldo_y_comisiones' | 'honorarios_externos';
 
 export interface Colaborador {
@@ -100,11 +91,6 @@ export interface ResumenNomina {
 }
 
 export interface IngresoMes {
-  mes: string;
-  ingresos: number;
-  neto: number;
-  porcentaje: number;
-}
 
 export interface ResumenFinanzas {
   meses: string[];

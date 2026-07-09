@@ -22,7 +22,8 @@ router.get('/', async (_req, res) => {
 router.post('/sembrar-inicial', requiereRol('admin'), async (req, res) => {
   const resultado = await sembrarColaboradores(req.usuario._id);
   res.json({
-    mensaje: 'Catálogo de colaboradores sincronizado (upsert por nombre normalizado).',
+    mensaje:
+      'Catálogo sincronizado desde seed (sobrescribe datos por nombre). Los cambios hechos en UI se conservan en uso normal.',
     ...resultado,
   });
 });

@@ -303,7 +303,12 @@
         {/if}
 
         <section class="card">
-          <h3>Detalle de pagos</h3>
+          <div class="seccion-encabezado">
+            <h3>Detalle de pagos</h3>
+            {#if puedeEditar}
+              <span class="hint-editable">La columna <strong>Unidad</strong> es editable en cada fila</span>
+            {/if}
+          </div>
           <div class="table-wrap">
             <table>
               <thead>
@@ -313,7 +318,10 @@
                   <th>Periodo</th>
                   <th>Concepto</th>
                   <th>Monto</th>
-                  <th>Unidad</th>
+                  <th class="col-unidad">
+                    Unidad
+                    {#if puedeEditar}<span class="col-editar" title="Editable">✎</span>{/if}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -331,22 +339,25 @@
                       <td>{pago.periodo}</td>
                       <td>{pago.concepto || '—'}</td>
                       <td>{formatearMoneda(pago.monto)}</td>
-                      <td>
-                        {#if puedeEditar}
-                          <select
-                            class="select select-sm"
-                            disabled={guardandoUnidad === pago._id}
-                            value={pago.unidadClasificada === 'sin_clasificar' ? 'Consulting' : pago.unidadClasificada}
-                            onchange={(e) =>
-                              cambiarUnidadPago(pago, e.currentTarget.value as UnidadPago)}
-                          >
-                            <option value="Consulting">Consulting</option>
-                            <option value="Technologies">Technologies</option>
-                            <option value="Grupo">Grupo</option>
-                          </select>
-                        {:else}
-                          {pago.unidadClasificada === 'sin_clasificar' ? 'Sin clasificar' : pago.unidadClasificada}
-                        {/if}
+                      <td class="celda-unidad">
+                        <select
+                          class="select select-unidad"
+                          class:select-editable={puedeEditar}
+                          disabled={!puedeEditar || guardandoUnidad === pago._id}
+                          value={pago.unidadClasificada === 'sin_clasificar' ? 'sin_clasificar' : pago.unidadClasificada}
+                          onchange={(e) => {
+                            const valor = e.currentTarget.value;
+                            if (valor === 'sin_clasificar') return;
+                            cambiarUnidadPago(pago, valor as UnidadPago);
+                          }}
+                        >
+                          <option value="sin_clasificar" disabled={pago.unidadClasificada !== 'sin_clasificar'}>
+                            Sin clasificar
+                          </option>
+                          <option value="Consulting">Consulting</option>
+                          <option value="Technologies">Technologies</option>
+                          <option value="Grupo">Grupo</option>
+                        </select>
                       </td>
                     </tr>
                   {/each}
@@ -491,7 +502,16 @@
   .badge-clasif.manual { background: #dbeafe; color: #1e40af; }
   .badge-clasif.sin-clasificar { background: #fee2e2; color: #991b1b; }
   tr.sin-clasificar, tr.sin-clasificar-fila { background: #fff7ed; }
-  .select-sm { font-size: 0.8rem; padding: 0.2rem 0.35rem; min-width: 7rem; }
+  .seccion-encabezado { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }
+  .seccion-encabezado h3 { margin-bottom: 0; }
+  .hint-editable { font-size: 0.78rem; color: var(--color-text-muted); }
+  .col-unidad { white-space: nowrap; }
+  .col-editar { margin-left: 0.25rem; color: var(--color-primary); font-size: 0.75rem; }
+  .celda-unidad { min-width: 9rem; }
+  .select-unidad { font-size: 0.8rem; padding: 0.25rem 0.4rem; min-width: 8.5rem; width: 100%; }
+  .select-unidad:not(.select-editable) { appearance: none; border: none; background: transparent; color: inherit; pointer-events: none; padding-left: 0; }
+  .select-unidad.select-editable { border: 1px solid var(--color-border); border-radius: 6px; background: white; cursor: pointer; }
+  .select-unidad.select-editable:focus { outline: 2px solid var(--color-primary); outline-offset: 1px; }
   .tabla-vacia { text-align: center; color: var(--color-text-muted); padding: 1rem; }
   .tabla-vacia-panel { text-align: center; color: var(--color-text-muted); }
   .link { background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: 0.8rem; }
