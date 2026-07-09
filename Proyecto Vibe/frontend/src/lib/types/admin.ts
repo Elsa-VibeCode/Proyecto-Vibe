@@ -5,7 +5,41 @@ export interface ResumenFacturacion {
   facturas: number;
   porCliente: { nombre: string; facturas: number; monto: number }[];
   porArea: { nombre: string; facturas: number; monto: number }[];
+  porUnidad?: { nombre: string; facturas: number; monto: number }[];
   porEstatus: { nombre: string; facturas: number; monto: number }[];
+}
+
+export interface ResumenClasificacionFacturacion {
+  total: number;
+  autoConfirmado: number;
+  porConfirmar: number;
+  noEncontrado: number;
+  cancelados: number;
+  activos: number;
+}
+
+export interface ClasificacionFacturacionInfo {
+  resumen: ResumenClasificacionFacturacion;
+  mapaCargado: boolean;
+}
+
+export interface MapaUnidad {
+  _id: string;
+  clienteRazonSocial: string;
+  unidad: 'Consulting' | 'Technologies' | 'Grupo';
+  estado: 'confirmado' | 'por_confirmar';
+  notas?: string;
+  actualizadoEn?: string;
+}
+
+export interface MapaProveedor {
+  _id: string;
+  rfcEmisor?: string;
+  razonSocial: string;
+  unidad: 'Consulting' | 'Technologies' | 'Grupo';
+  estado: 'confirmado' | 'por_confirmar';
+  notas?: string;
+  actualizadoEn?: string;
 }
 
 export interface IngresoMes {
@@ -45,6 +79,7 @@ export interface ResumenModulo {
   totalFilas: number;
   importacion: ImportacionResumen;
   facturacion?: ResumenFacturacion;
+  clasificacionFacturacion?: ClasificacionFacturacionInfo;
   finanzas?: ResumenFinanzas;
   estadoCuenta?: ResumenEstadoCuenta;
   conciliacion?: ResumenConciliacion;
@@ -139,6 +174,8 @@ export interface FiltrosFacturacion {
   estatusPago: string;
   totalMin: string;
   totalMax: string;
+  soloSinClasificar: string;
+  estadoClasificacion: string;
 }
 
 export function filtrosFacturacionVacios(): FiltrosFacturacion {
@@ -148,5 +185,7 @@ export function filtrosFacturacionVacios(): FiltrosFacturacion {
     estatusPago: '',
     totalMin: '',
     totalMax: '',
+    soloSinClasificar: '',
+    estadoClasificacion: '',
   };
 }

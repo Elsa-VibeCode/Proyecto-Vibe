@@ -2,7 +2,11 @@ import { Router } from 'express';
 import multer from 'multer';
 import { ExcelImport } from '../models/ExcelImport.js';
 import { protegerRuta } from '../middleware/auth.js';
-import { parsearExcel, generarExcel, previsualizarLibro } from '../utils/excel.js';
+import { MapaUnidad } from '../models/MapaUnidad.js';
+import {
+  enriquecerFilasFacturacion,
+  resumenClasificacionFacturacion,
+} from '../utils/clasificacionMotor.js';
 import {
   detectarColumnas,
   detectarTipoHoja,
@@ -71,6 +75,20 @@ async function obtenerMapaColaboradoresUnidad(usuarioId) {
   return crearMapaColaboradoresUnidad(importacionSueldos.filas, mapeoSueldos);
 }
 
+async function obtenerMapaUnidades() {
+  return MapaUnidad.find().lean();
+}
+
+async function aplicarClasificacionFacturacion(filas, mapeo) {
+  const mapaUnidades = await obtenerMapaUnidades();
+  const filasEnriquecidas = enriquecerFilasFacturacion(filas, mapeo, mapaUnidades);
+  return {
+    filas: filasEnriquecidas,
+    resumenClasificacion: resumenClasificacionFacturacion(filasEnriquecidas),
+    mapaCargado: mapaUnidades.length > 0,
+  };
+}
+
 async function construirResumen(importacion, filtros = {}, usuarioId = null) {
   const mapeo = detectarColumnas(importacion.columnas);
   const tipoHoja =
@@ -79,6 +97,16 @@ async function construirResumen(importacion, filtros = {}, usuarioId = null) {
 
   let filasBase = importacion.filas;
   let infoClasificacion = { reclasificados: 0, usaMapaSueldos: false };
+  let infoFacturacionClasificacion = null;
+
+  if (tipoHoja === 'facturacion') {
+    const resultado = await aplicarClasificacionFacturacion(filasBase, mapeo);
+    filasBase = resultado.filas;
+    infoFacturacionClasificacion = {
+      resumen: resultado.resumenClasificacion,
+      mapaCargado: resultado.mapaCargado,
+    };
+  }
 
   if (
     usuarioId &&
@@ -110,6 +138,7 @@ async function construirResumen(importacion, filtros = {}, usuarioId = null) {
 
   if (tipoHoja === 'facturacion') {
     resumen.facturacion = calcularResumenFacturacion(filasFiltradas, mapeo);
+    resumen.clasificacionFacturacion = infoFacturacionClasificacion;
     resumen.filas = filasFiltradas;
   } else if (tipoHoja === 'resumen-mensual') {
     resumen.finanzas = calcularResumenFinanzas(filasFiltradas, importacion.columnas);
@@ -301,6 +330,13 @@ router.post('/importar', (req, res) => {
         datosEstructurados,
         subidoPor: req.usuario._id,
       });
+
+      if (tipoHoja === 'facturacion') {
+        const mapeoFacturacion = detectarColumnas(columnas);
+        const resultado = await aplicarClasificacionFacturacion(importacion.filas, mapeoFacturacion);
+        importacion.filas = resultado.filas;
+        await importacion.save();
+      }
 
       res.status(201).json({
         mensaje: 'Archivo importado correctamente',

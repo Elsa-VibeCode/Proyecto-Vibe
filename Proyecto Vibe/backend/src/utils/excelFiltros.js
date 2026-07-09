@@ -447,6 +447,12 @@ export function filtrarFilas(filas, mapeo, filtros = {}) {
     if (filtros.estatusPago && estatusPago !== filtros.estatusPago) return false;
     if (filtros.estado && estado !== filtros.estado) return false;
     if (filtros.enFacturas && enFacturas !== filtros.enFacturas) return false;
+    if (filtros.estadoClasificacion && fila.estadoClasificacion !== filtros.estadoClasificacion) {
+      return false;
+    }
+    if (filtros.soloSinClasificar === 'true' && fila.estadoClasificacion !== 'no_encontrado') {
+      return false;
+    }
     if (filtros.puesto && puesto !== filtros.puesto) return false;
     if (filtros.nivelPuesto && nivel !== filtros.nivelPuesto) return false;
     if (filtros.categoria && categoria !== filtros.categoria) return false;
@@ -471,13 +477,16 @@ export function calcularResumenFacturacion(filas, mapeo) {
   let totalPagado = 0;
   let totalPendiente = 0;
   const porCliente = new Map();
-  const porArea = new Map();
+  const porUnidad = new Map();
   const porEstatus = new Map();
 
   for (const fila of filas) {
+    if (fila.excluidoDeTotales) continue;
+
     const monto = parsearNumero(obtenerValor(fila, columnaMonto)) ?? 0;
     const cliente = String(obtenerValor(fila, mapeo.cliente) ?? 'Sin cliente').trim() || 'Sin cliente';
-    const area = String(obtenerValor(fila, mapeo.areaVenta) ?? 'Sin área').trim() || 'Sin área';
+    const unidad =
+      String(fila.unidadClasificada ?? 'sin_clasificar').trim() || 'sin_clasificar';
     const estatus = String(obtenerValor(fila, mapeo.estatusPago) ?? 'Sin estatus').trim() || 'Sin estatus';
     const pagado = mapeo.estatusPago ? esPagado(estatus) : false;
 
@@ -490,10 +499,10 @@ export function calcularResumenFacturacion(filas, mapeo) {
     grupoCliente.facturas += 1;
     grupoCliente.monto += monto;
 
-    if (!porArea.has(area)) porArea.set(area, { facturas: 0, monto: 0 });
-    const grupoArea = porArea.get(area);
-    grupoArea.facturas += 1;
-    grupoArea.monto += monto;
+    if (!porUnidad.has(unidad)) porUnidad.set(unidad, { facturas: 0, monto: 0 });
+    const grupoUnidad = porUnidad.get(unidad);
+    grupoUnidad.facturas += 1;
+    grupoUnidad.monto += monto;
 
     if (!porEstatus.has(estatus)) porEstatus.set(estatus, { facturas: 0, monto: 0 });
     const grupoEstatus = porEstatus.get(estatus);
@@ -506,13 +515,18 @@ export function calcularResumenFacturacion(filas, mapeo) {
       .map(([nombre, datos]) => ({ nombre, ...datos }))
       .sort((a, b) => b.monto - a.monto);
 
+  const porUnidadOrdenado = ordenar([...porUnidad.entries()]).filter(
+    (item) => item.nombre !== 'sin_clasificar'
+  );
+
   return {
     totalFacturado: Math.round(totalFacturado),
     totalPagado: Math.round(totalPagado),
     totalPendiente: Math.round(totalPendiente),
-    facturas: filas.length,
+    facturas: filas.filter((fila) => !fila.excluidoDeTotales).length,
     porCliente: ordenar([...porCliente.entries()]).slice(0, 10),
-    porArea: ordenar([...porArea.entries()]),
+    porUnidad: porUnidadOrdenado,
+    porArea: porUnidadOrdenado,
     porEstatus: ordenar([...porEstatus.entries()]),
   };
 }

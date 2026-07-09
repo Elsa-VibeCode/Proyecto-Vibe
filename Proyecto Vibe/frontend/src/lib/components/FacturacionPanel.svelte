@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { auth } from '$lib/auth';
   import { api } from '$lib/api';
   import { formatearMoneda } from '$lib/excelFiltros';
   import type { FiltrosFacturacion, ResumenModulo } from '$lib/types/admin';
@@ -8,8 +9,12 @@
   let resumen = $state<ResumenModulo | null>(null);
   let error = $state('');
   let cargando = $state(true);
+  let reclasificando = $state(false);
+  let mensaje = $state('');
   let filtros = $state<FiltrosFacturacion>(filtrosFacturacionVacios());
   let opcionesFiltro = $state({ clientes: [] as string[], areas: [] as string[], estatus: [] as string[] });
+
+  let puedeEditar = $derived($auth.usuario?.rol === 'admin' || $auth.usuario?.rol === 'editor');
 
   let clientes = $derived(opcionesFiltro.clientes);
   let areas = $derived(opcionesFiltro.areas);
@@ -54,6 +59,8 @@
     if (filtros.estatusPago) params.set('estatusPago', filtros.estatusPago);
     if (filtros.totalMin) params.set('totalMin', filtros.totalMin);
     if (filtros.totalMax) params.set('totalMax', filtros.totalMax);
+    if (filtros.soloSinClasificar) params.set('soloSinClasificar', filtros.soloSinClasificar);
+    if (filtros.estadoClasificacion) params.set('estadoClasificacion', filtros.estadoClasificacion);
 
     const query = params.toString();
     const endpoint = `/excel/ultima/facturacion${query ? `?${query}` : ''}`;
@@ -92,6 +99,37 @@
     }
     return valor === null || valor === undefined ? '' : String(valor);
   }
+
+  async function reclasificar() {
+    reclasificando = true;
+    mensaje = '';
+    try {
+      const data = await api<{ mensaje: string }>('/mapas/reclasificar-facturacion', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      mensaje = data.mensaje;
+      await cargarDatos(false);
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'No se pudo reclasificar';
+    } finally {
+      reclasificando = false;
+    }
+  }
+
+  function etiquetaClasificacion(fila: Record<string, unknown>): string {
+    if (fila.excluidoDeTotales) return 'Cancelada';
+    if (fila.estadoClasificacion === 'no_encontrado') return 'Sin clasificar';
+    if (fila.estadoClasificacion === 'por_confirmar') return 'Por confirmar';
+    return String(fila.unidadClasificada ?? 'Consulting');
+  }
+
+  function claseBadge(fila: Record<string, unknown>): string {
+    if (fila.excluidoDeTotales) return 'cancelada';
+    if (fila.estadoClasificacion === 'no_encontrado') return 'sin-clasificar';
+    if (fila.estadoClasificacion === 'por_confirmar') return 'por-confirmar';
+    return 'confirmada';
+  }
 </script>
 
 {#if cargando}
@@ -111,6 +149,21 @@
         <strong>{resumen.importacion.nombreArchivo}</strong> · {resumen.importacion.nombreHoja} ·
         {resumen.totalFilas} facturas mostradas
       </p>
+      {#if resumen.clasificacionFacturacion}
+        {@const c = resumen.clasificacionFacturacion.resumen}
+        <p class="clasificacion-meta">
+          Clasificación automática:
+          {c.autoConfirmado} confirmadas · {c.porConfirmar} por confirmar ·
+          <strong class="alerta">{c.noEncontrado} sin clasificar</strong>
+          {#if c.cancelados > 0}· {c.cancelados} canceladas (excluidas de totales){/if}
+        </p>
+        {#if !resumen.clasificacionFacturacion.mapaCargado}
+          <p class="aviso-mapa">
+            El mapa de clientes está vacío. Ejecuta el seed o agrega clientes en
+            <a href="/clasificacion">Clasificación</a>.
+          </p>
+        {/if}
+      {/if}
     </div>
 
     <div class="stats-grid">
@@ -135,8 +188,23 @@
     <section class="card filtros-panel">
       <div class="filtros-header">
         <h3>Filtros</h3>
-        <button type="button" class="link" onclick={limpiarFiltros}>Limpiar</button>
+        <div class="filtros-acciones">
+          {#if puedeEditar}
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              disabled={reclasificando}
+              onclick={reclasificar}
+            >
+              {reclasificando ? 'Reclasificando...' : 'Reclasificar pendientes'}
+            </button>
+          {/if}
+          <button type="button" class="link" onclick={limpiarFiltros}>Limpiar</button>
+        </div>
       </div>
+      {#if mensaje}
+        <p class="mensaje-ok">{mensaje}</p>
+      {/if}
       <div class="filtros-grid">
         <div class="form-group">
           <label class="label" for="f-cliente">Cliente</label>
@@ -173,6 +241,21 @@
           <label class="label" for="f-max">Monto máximo</label>
           <input id="f-max" class="input" type="number" bind:value={filtros.totalMax} placeholder="Ej. 500000" />
         </div>
+        <div class="form-group">
+          <label class="label" for="f-clasif">Clasificación</label>
+          <select id="f-clasif" class="select" bind:value={filtros.estadoClasificacion}>
+            <option value="">Todas</option>
+            <option value="auto_confirmado">Auto confirmadas</option>
+            <option value="por_confirmar">Por confirmar</option>
+            <option value="no_encontrado">Sin clasificar</option>
+          </select>
+        </div>
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" bind:checked={filtros.soloSinClasificar} true-value="true" false-value="" />
+            Solo sin clasificar
+          </label>
+        </div>
       </div>
       <button class="btn btn-primary btn-sm" onclick={aplicarFiltros}>Aplicar filtros</button>
     </section>
@@ -199,14 +282,14 @@
       </section>
 
       <section class="card">
-        <h3>Por área de venta</h3>
+        <h3>Por unidad clasificada</h3>
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Área</th><th>Facturas</th><th>Monto</th></tr>
+              <tr><th>Unidad</th><th>Facturas</th><th>Monto</th></tr>
             </thead>
             <tbody>
-              {#each resumen.facturacion.porArea as item}
+              {#each resumen.facturacion.porUnidad ?? resumen.facturacion.porArea as item}
                 <tr>
                   <td>{item.nombre}</td>
                   <td>{item.facturas}</td>
@@ -225,6 +308,7 @@
         <table>
           <thead>
             <tr>
+              <th>Clasificación</th>
               {#each columnasTabla() as columna}
                 <th>{columna}</th>
               {/each}
@@ -232,7 +316,10 @@
           </thead>
           <tbody>
             {#each resumen.filas ?? [] as fila}
-              <tr>
+              <tr class:sin-clasificar={fila.estadoClasificacion === 'no_encontrado'}>
+                <td>
+                  <span class="badge-clasif {claseBadge(fila)}">{etiquetaClasificacion(fila)}</span>
+                </td>
                 {#each columnasTabla() as columna}
                   <td>{valorCelda(fila, columna)}</td>
                 {/each}
@@ -248,6 +335,19 @@
 <style>
   .modulo-contenido { display: flex; flex-direction: column; gap: 1.25rem; }
   .meta-info { padding: 0.875rem 1rem; font-size: 0.875rem; color: var(--color-text-muted); }
+  .clasificacion-meta { margin-top: 0.35rem; }
+  .clasificacion-meta .alerta { color: var(--color-danger); }
+  .aviso-mapa { margin-top: 0.35rem; color: var(--color-warning); font-size: 0.82rem; }
+  .mensaje-ok { color: var(--color-success); font-size: 0.85rem; margin-bottom: 0.5rem; }
+  .filtros-acciones { display: flex; gap: 0.75rem; align-items: center; }
+  .checkbox-group { display: flex; align-items: end; }
+  .checkbox-label { display: flex; gap: 0.5rem; align-items: center; font-size: 0.875rem; }
+  .badge-clasif { font-size: 0.72rem; padding: 0.2rem 0.5rem; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+  .badge-clasif.confirmada { background: #dcfce7; color: #166534; }
+  .badge-clasif.por-confirmar { background: #fef9c3; color: #854d0e; }
+  .badge-clasif.sin-clasificar { background: #fee2e2; color: #991b1b; }
+  .badge-clasif.cancelada { background: #f1f5f9; color: #64748b; }
+  tr.sin-clasificar { background: #fff7ed; }
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; }
   .stat-card { padding: 1rem; display: flex; flex-direction: column; gap: 0.25rem; }
   .stat-label { font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; }
