@@ -1,36 +1,53 @@
 import { Colaborador } from '../models/Colaborador.js';
+import { NominaPago } from '../models/NominaPago.js';
 import { normalizarClave } from '../utils/clasificacionMotor.js';
+import { inferirTipoNomina } from '../utils/nominaMotor.js';
 import { COLABORADORES_SEED } from '../data/seedColaboradoresData.js';
 
 export async function upsertColaborador(datos, usuarioId = null) {
   const nombre = String(datos.nombre ?? '').trim();
   if (!nombre) throw new Error('El nombre es obligatorio');
 
-  return Colaborador.findOneAndUpdate(
+  const tipoNomina =
+    datos.tipoNomina ?? inferirTipoNomina(datos.unidadBase, datos.tipoRelacion);
+
+  const doc = await Colaborador.findOneAndUpdate(
     { nombreNormalizado: normalizarClave(nombre) },
     {
       nombre,
       unidadBase: datos.unidadBase,
       tipoRelacion: datos.tipoRelacion,
-      reglasSueldo: datos.reglasSueldo ?? [],
+      tipoNomina,
       notas: datos.notas ?? '',
       actualizadoPor: usuarioId,
     },
     { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
   );
+
+  if (doc.reglasSueldo) {
+    doc.reglasSueldo = undefined;
+    await doc.save();
+  }
+
+  return doc;
 }
 
 export async function sembrarColaboradores(usuarioId = null) {
   await Colaborador.updateMany({ tipoRelacion: 'empleado' }, { $set: { tipoRelacion: 'colaborador' } });
+  await Colaborador.updateMany({}, { $unset: { reglasSueldo: '' } });
+  await NominaPago.updateMany(
+    { estadoClasificacion: 'excede_tope_revisar' },
+    { $set: { estadoClasificacion: 'auto_confirmado' }, $unset: { montoExcedente: '' } }
+  );
 
   let sembrados = 0;
   let actualizados = 0;
 
-  for (const [nombre, unidadBase, tipoRelacion, notas, reglasSueldo] of COLABORADORES_SEED) {
+  for (const [nombre, unidadBase, tipoRelacion, tipoNomina, notas] of COLABORADORES_SEED) {
     const key = normalizarClave(nombre);
     const existia = await Colaborador.exists({ nombreNormalizado: key });
     await upsertColaborador(
-      { nombre, unidadBase, tipoRelacion, notas, reglasSueldo: reglasSueldo ?? [] },
+      { nombre, unidadBase, tipoRelacion, tipoNomina, notas },
       usuarioId
     );
     if (existia) actualizados += 1;
@@ -44,7 +61,7 @@ export async function asegurarColaboradoresDisponibles(usuarioId = null) {
   const resultado = await sembrarColaboradores(usuarioId);
   const total = await Colaborador.countDocuments();
   return {
-    origen: total === 0 ? 'vacio' : 'catalogo',
+    origen: 'catalogo',
     total,
     ...resultado,
   };

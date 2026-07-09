@@ -1,21 +1,6 @@
 import mongoose from 'mongoose';
 import { normalizarClave } from '../utils/clasificacionMotor.js';
 
-const reglaSueldoSchema = new mongoose.Schema(
-  {
-    vigenciaDesde: { type: Date, required: true },
-    vigenciaHasta: { type: Date, default: null },
-    tipo: {
-      type: String,
-      enum: ['sueldo_fijo', 'por_proyecto'],
-      required: true,
-    },
-    montoTope: { type: Number, default: null },
-    notas: { type: String, default: '', trim: true },
-  },
-  { _id: true }
-);
-
 const colaboradorSchema = new mongoose.Schema(
   {
     nombre: { type: String, required: true, trim: true },
@@ -30,7 +15,11 @@ const colaboradorSchema = new mongoose.Schema(
       enum: ['socio', 'colaborador', 'honorarios_externos'],
       required: true,
     },
-    reglasSueldo: { type: [reglaSueldoSchema], default: [] },
+    tipoNomina: {
+      type: String,
+      enum: ['honorarios_por_proyecto', 'sueldo_y_comisiones', 'honorarios_externos'],
+      required: true,
+    },
     notas: { type: String, default: '', trim: true },
     actualizadoPor: {
       type: mongoose.Schema.Types.ObjectId,

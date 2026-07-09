@@ -1,86 +1,55 @@
 /** @typedef {'Consulting'|'Technologies'|'Grupo'} Unidad */
 /** @typedef {'socio'|'colaborador'|'honorarios_externos'} TipoRelacion */
+/** @typedef {'honorarios_por_proyecto'|'sueldo_y_comisiones'|'honorarios_externos'} TipoNomina */
 
 /**
- * @type {Array<[string, Unidad, TipoRelacion, string, Array<object>|null]>}
+ * [nombre, unidadBase, tipoRelacion, tipoNomina, notas]
+ * @type {Array<[string, Unidad, TipoRelacion, TipoNomina, string]>}
  */
 export const COLABORADORES_SEED = [
   [
     'Salvador Carrejo Orozco (Chava)',
     'Consulting',
     'socio',
-    '$58,000/mes ene–abr 2026; desde mayo por_proyecto; gastos de representación siempre Grupo',
-    [
-      {
-        vigenciaDesde: new Date('2026-01-01'),
-        vigenciaHasta: new Date('2026-04-30'),
-        tipo: 'sueldo_fijo',
-        montoTope: 58000,
-        notas: 'Sueldo base enero–abril 2026',
-      },
-      {
-        vigenciaDesde: new Date('2026-05-01'),
-        vigenciaHasta: null,
-        tipo: 'por_proyecto',
-        montoTope: null,
-        notas: 'Sin tope fijo desde mayo 2026',
-      },
-    ],
+    'honorarios_por_proyecto',
+    'Honorarios por proyecto → Consulting completo; gastos de representación siempre Grupo',
   ],
   [
     'Elsa Ivette Domínguez León',
     'Consulting',
     'socio',
-    '$58,000/mes ene–abr 2026; desde mayo por_proyecto; +$5,800/mes administración fijo a Technologies',
-    [
-      {
-        vigenciaDesde: new Date('2026-01-01'),
-        vigenciaHasta: new Date('2026-04-30'),
-        tipo: 'sueldo_fijo',
-        montoTope: 58000,
-        notas: 'Sueldo base enero–abril 2026',
-      },
-      {
-        vigenciaDesde: new Date('2026-05-01'),
-        vigenciaHasta: null,
-        tipo: 'por_proyecto',
-        montoTope: null,
-        notas: 'Sin tope fijo desde mayo 2026',
-      },
-    ],
+    'honorarios_por_proyecto',
+    'Honorarios por proyecto → Consulting; administración $5,800/mes → Technologies (por concepto)',
   ],
   [
     'Mario Alejandro García Varela',
     'Technologies',
     'socio',
-    '$90,000/mes todos los meses sin cambio; excedente si lo hubiera → revisión',
-    [
-      {
-        vigenciaDesde: new Date('2026-01-01'),
-        vigenciaHasta: null,
-        tipo: 'sueldo_fijo',
-        montoTope: 90000,
-        notas: 'Sin cambio de régimen en mayo',
-      },
-    ],
+    'sueldo_y_comisiones',
+    'Sueldo base + comisiones → Technologies completo',
   ],
   [
     'Roberto Fuentes Juárez',
     'Grupo',
     'honorarios_externos',
-    'Abogado del Grupo — honorarios externos, siempre Grupo (no es colaborador interno)',
-    [],
+    'honorarios_externos',
+    'Abogado del Grupo — honorarios externos, siempre Grupo',
   ],
-  ['Ana Paula Méndez Salcedo', 'Consulting', 'colaborador', 'Nómina / gastos de viaje / comisiones', []],
-  ['César Ulises Elías Ogaz', 'Consulting', 'colaborador', 'Nómina / comisiones', []],
-  ['Luis Fernando Pérez Nájera', 'Technologies', 'colaborador', 'Nómina', []],
-  ['Pamela Guizar Mendoza', 'Technologies', 'colaborador', 'Nómina', []],
-  ['Larissa Gabriela Bolívar Vázquez', 'Technologies', 'colaborador', 'Nómina', []],
-  ['Adrián Apolinar Pacheco Franco', 'Technologies', 'colaborador', 'Nómina', []],
-  ['Eduardo Curiel Pérez', 'Technologies', 'colaborador', 'Nómina / comisiones', []],
-  ['Roberto Bernádez', 'Consulting', 'socio', 'Socio agregado', []],
-  ['Antonio Fernández (Tony)', 'Consulting', 'socio', '', []],
+  [
+    'Ana Paula Méndez Salcedo',
+    'Consulting',
+    'colaborador',
+    'honorarios_por_proyecto',
+    'Nómina / gastos de viaje / comisiones',
+  ],
+  ['César Ulises Elías Ogaz', 'Consulting', 'colaborador', 'honorarios_por_proyecto', 'Nómina / comisiones'],
+  ['Luis Fernando Pérez Nájera', 'Technologies', 'colaborador', 'sueldo_y_comisiones', 'Nómina'],
+  ['Pamela Guizar Mendoza', 'Technologies', 'colaborador', 'sueldo_y_comisiones', 'Nómina'],
+  ['Larissa Gabriela Bolívar Vázquez', 'Technologies', 'colaborador', 'sueldo_y_comisiones', 'Nómina'],
+  ['Adrián Apolinar Pacheco Franco', 'Technologies', 'colaborador', 'sueldo_y_comisiones', 'Nómina'],
+  ['Eduardo Curiel Pérez', 'Technologies', 'colaborador', 'sueldo_y_comisiones', 'Nómina / comisiones'],
+  ['Roberto Bernádez', 'Consulting', 'socio', 'honorarios_por_proyecto', 'Socio agregado'],
+  ['Antonio Fernández (Tony)', 'Consulting', 'socio', 'honorarios_por_proyecto', ''],
 ];
 
-/** Monto fijo administración Elsa → Technologies (concepto separado del sueldo base). */
 export const MONTO_ADMINISTRACION_ELSA = 5800;

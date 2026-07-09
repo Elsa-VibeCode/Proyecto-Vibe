@@ -2,31 +2,13 @@ import { normalizarClave } from './clasificacionMotor.js';
 import { MONTO_ADMINISTRACION_ELSA } from '../data/seedColaboradoresData.js';
 
 const MESES_MAP = {
-  enero: 1,
-  febrero: 2,
-  marzo: 3,
-  abril: 4,
-  mayo: 5,
-  junio: 6,
-  julio: 7,
-  agosto: 8,
-  septiembre: 9,
-  octubre: 10,
-  noviembre: 11,
-  diciembre: 12,
-  ene: 1,
-  feb: 2,
-  mar: 3,
-  abr: 4,
-  may: 5,
-  jun: 6,
-  jul: 7,
-  ago: 8,
-  sep: 9,
-  oct: 10,
-  nov: 11,
-  dic: 12,
+  enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6,
+  julio: 7, agosto: 8, septiembre: 9, octubre: 10, noviembre: 11, diciembre: 12,
+  ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6,
+  jul: 7, ago: 8, sep: 9, oct: 10, nov: 11, dic: 12,
 };
+
+const UNIDADES_VALIDAS = new Set(['Consulting', 'Technologies', 'Grupo']);
 
 export function buscarColaboradorPorTexto(texto, indice) {
   const norm = normalizarClave(texto);
@@ -54,7 +36,7 @@ function esGastoRepresentacion(concepto) {
 function esHonorariosAbogado(concepto, colaborador) {
   const norm = normalizarClave(concepto);
   if (norm.includes('abogado')) return true;
-  if (colaborador?.tipoRelacion === 'honorarios_externos') return true;
+  if (colaborador?.tipoNomina === 'honorarios_externos') return true;
   if (normalizarClave(colaborador?.nombre ?? '').includes('roberto fuentes')) return true;
   return false;
 }
@@ -83,76 +65,23 @@ function unidadBlueGreen(concepto) {
   return 'Grupo';
 }
 
-function reglaVigente(colaborador, fecha) {
-  const reglas = [...(colaborador.reglasSueldo ?? [])].sort(
-    (a, b) => new Date(a.vigenciaDesde) - new Date(b.vigenciaDesde)
-  );
-  const ts = fecha.getTime();
+function clasificarPorTipoNomina(colaborador, monto) {
+  const tipo = colaborador.tipoNomina;
 
-  for (let i = reglas.length - 1; i >= 0; i -= 1) {
-    const regla = reglas[i];
-    const desde = new Date(regla.vigenciaDesde).getTime();
-    const hasta = regla.vigenciaHasta ? new Date(regla.vigenciaHasta).getTime() : null;
-    if (ts >= desde && (hasta === null || ts <= hasta)) return regla;
+  if (tipo === 'honorarios_externos') {
+    return { unidadClasificada: 'Grupo', estadoClasificacion: 'auto_confirmado' };
   }
 
-  return null;
-}
-
-function clasificarEmpleadoOExterno(colaborador) {
-  if (colaborador.tipoRelacion === 'honorarios_externos') {
+  if (tipo === 'honorarios_por_proyecto' || tipo === 'sueldo_y_comisiones') {
     return {
-      unidadClasificada: 'Grupo',
+      unidadClasificada: colaborador.unidadBase,
       estadoClasificacion: 'auto_confirmado',
-      montoClasificadoBase: null,
-      montoExcedente: 0,
     };
   }
 
   return {
-    unidadClasificada: colaborador.unidadBase,
-    estadoClasificacion: 'auto_confirmado',
-    montoClasificadoBase: null,
-    montoExcedente: 0,
-  };
-}
-
-function clasificarConRegla(colaborador, monto, regla) {
-  const unidad = colaborador.unidadBase;
-
-  if (!regla) {
-    return {
-      unidadClasificada: unidad,
-      estadoClasificacion: 'excede_tope_revisar',
-      montoClasificadoBase: 0,
-      montoExcedente: monto,
-    };
-  }
-
-  if (regla.tipo === 'por_proyecto') {
-    return {
-      unidadClasificada: unidad,
-      estadoClasificacion: 'excede_tope_revisar',
-      montoClasificadoBase: 0,
-      montoExcedente: monto,
-    };
-  }
-
-  const tope = regla.montoTope ?? monto;
-  if (monto <= tope) {
-    return {
-      unidadClasificada: unidad,
-      estadoClasificacion: 'auto_confirmado',
-      montoClasificadoBase: monto,
-      montoExcedente: 0,
-    };
-  }
-
-  return {
-    unidadClasificada: unidad,
-    estadoClasificacion: 'excede_tope_revisar',
-    montoClasificadoBase: tope,
-    montoExcedente: Math.round((monto - tope) * 100) / 100,
+    unidadClasificada: colaborador.unidadBase ?? 'sin_clasificar',
+    estadoClasificacion: 'no_encontrado',
   };
 }
 
@@ -166,26 +95,24 @@ export function clasificarPagoNomina(pago, indice) {
     return resultadoSinClasificar();
   }
 
-  const colaborador = buscarColaboradorPorTexto(nombreColaborador, indice);
-
-  if (esGastoRepresentacion(concepto)) {
+  if (pago.unidadManual && UNIDADES_VALIDAS.has(pago.unidadClasificada)) {
     return {
-      colaboradorId: colaborador?._id ?? null,
-      unidadClasificada: 'Grupo',
-      estadoClasificacion: colaborador ? 'auto_confirmado' : 'no_encontrado',
+      colaboradorId: pago.colaboradorId ?? null,
+      unidadClasificada: pago.unidadClasificada,
+      estadoClasificacion: 'manual',
       montoClasificadoBase: monto,
-      montoExcedente: 0,
+      unidadManual: true,
     };
   }
 
+  const colaborador = buscarColaboradorPorTexto(nombreColaborador, indice);
+
+  if (esGastoRepresentacion(concepto)) {
+    return confirmado(colaborador?._id ?? null, 'Grupo', monto);
+  }
+
   if (esGastoBlueGreen(concepto, fecha)) {
-    return {
-      colaboradorId: colaborador?._id ?? null,
-      unidadClasificada: unidadBlueGreen(concepto),
-      estadoClasificacion: 'auto_confirmado',
-      montoClasificadoBase: monto,
-      montoExcedente: 0,
-    };
+    return confirmado(colaborador?._id ?? null, unidadBlueGreen(concepto), monto);
   }
 
   if (!colaborador) {
@@ -193,37 +120,31 @@ export function clasificarPagoNomina(pago, indice) {
   }
 
   if (esHonorariosAbogado(concepto, colaborador)) {
-    return {
-      colaboradorId: colaborador._id,
-      unidadClasificada: 'Grupo',
-      estadoClasificacion: 'auto_confirmado',
-      montoClasificadoBase: monto,
-      montoExcedente: 0,
-    };
+    return confirmado(colaborador._id, 'Grupo', monto);
   }
 
   if (esAdministracionElsa(concepto, colaborador, monto)) {
-    return {
-      colaboradorId: colaborador._id,
-      unidadClasificada: 'Technologies',
-      estadoClasificacion: 'auto_confirmado',
-      montoClasificadoBase: monto,
-      montoExcedente: 0,
-    };
+    return confirmado(colaborador._id, 'Technologies', monto);
   }
 
-  if (
-    colaborador.tipoRelacion === 'colaborador' ||
-    colaborador.tipoRelacion === 'empleado' ||
-    colaborador.tipoRelacion === 'honorarios_externos'
-  ) {
-    const base = clasificarEmpleadoOExterno(colaborador);
-    return { colaboradorId: colaborador._id, ...base, montoClasificadoBase: monto };
-  }
+  const { unidadClasificada, estadoClasificacion } = clasificarPorTipoNomina(colaborador, monto);
+  return {
+    colaboradorId: colaborador._id,
+    unidadClasificada,
+    estadoClasificacion,
+    montoClasificadoBase: monto,
+    unidadManual: false,
+  };
+}
 
-  const regla = reglaVigente(colaborador, fecha);
-  const resultado = clasificarConRegla(colaborador, monto, regla);
-  return { colaboradorId: colaborador._id, ...resultado };
+function confirmado(colaboradorId, unidad, monto) {
+  return {
+    colaboradorId,
+    unidadClasificada: unidad,
+    estadoClasificacion: 'auto_confirmado',
+    montoClasificadoBase: monto,
+    unidadManual: false,
+  };
 }
 
 function resultadoSinClasificar() {
@@ -232,54 +153,41 @@ function resultadoSinClasificar() {
     unidadClasificada: 'sin_clasificar',
     estadoClasificacion: 'no_encontrado',
     montoClasificadoBase: 0,
-    montoExcedente: 0,
+    unidadManual: false,
   };
 }
 
 export function enriquecerPagoNomina(pago, indice) {
-  const clasificacion = clasificarPagoNomina(pago, indice);
-  const montoBase =
-    clasificacion.montoClasificadoBase === null
-      ? pago.monto
-      : clasificacion.montoClasificadoBase;
-
-  return {
-    ...pago,
-    ...clasificacion,
-    montoClasificadoBase: montoBase,
-  };
+  return { ...pago, ...clasificarPagoNomina(pago, indice) };
 }
 
 export function resumenClasificacionNomina(pagos) {
   const resumen = {
     total: pagos.length,
     autoConfirmado: 0,
-    excedeTopeRevisar: 0,
+    manual: 0,
     noEncontrado: 0,
     montoTotal: 0,
     montoPorUnidad: { Consulting: 0, Technologies: 0, Grupo: 0, sin_clasificar: 0 },
-    montoExcedente: 0,
   };
 
   for (const pago of pagos) {
     resumen.montoTotal += pago.monto;
     if (pago.estadoClasificacion === 'auto_confirmado') resumen.autoConfirmado += 1;
-    else if (pago.estadoClasificacion === 'excede_tope_revisar') resumen.excedeTopeRevisar += 1;
+    else if (pago.estadoClasificacion === 'manual') resumen.manual += 1;
     else if (pago.estadoClasificacion === 'no_encontrado') resumen.noEncontrado += 1;
 
-    const base = pago.montoClasificadoBase ?? 0;
+    const base = pago.montoClasificadoBase ?? pago.monto ?? 0;
     const unidad = pago.unidadClasificada ?? 'sin_clasificar';
     if (resumen.montoPorUnidad[unidad] !== undefined) {
       resumen.montoPorUnidad[unidad] += base;
     }
-    resumen.montoExcedente += pago.montoExcedente ?? 0;
   }
 
   for (const k of Object.keys(resumen.montoPorUnidad)) {
     resumen.montoPorUnidad[k] = Math.round(resumen.montoPorUnidad[k]);
   }
   resumen.montoTotal = Math.round(resumen.montoTotal);
-  resumen.montoExcedente = Math.round(resumen.montoExcedente);
 
   return resumen;
 }
@@ -297,7 +205,7 @@ export function calcularResumenNominaMensual(pagos) {
     const mes = periodoAMesEtiqueta(pago.periodo, pago.fecha);
     mesesSet.add(mes);
     const unidad = pago.unidadClasificada ?? 'sin_clasificar';
-    const monto = pago.montoClasificadoBase ?? 0;
+    const monto = pago.montoClasificadoBase ?? pago.monto ?? 0;
     if (!filas[unidad]) filas[unidad] = {};
     filas[unidad][mes] = (filas[unidad][mes] ?? 0) + monto;
   }
@@ -340,12 +248,21 @@ export function periodoAMesEtiqueta(periodo, fecha) {
 
   const norm = normalizarClave(periodo);
   for (const [nombre, num] of Object.entries(MESES_MAP)) {
-    if (norm.includes(nombre)) return capitalizar(nombre.length > 3 ? nombre : Object.keys(MESES_MAP).find((k) => MESES_MAP[k] === num && k.length > 3) ?? nombre);
+    if (norm.includes(nombre)) {
+      return capitalizar(
+        nombre.length > 3
+          ? nombre
+          : Object.keys(MESES_MAP).find((k) => MESES_MAP[k] === num && k.length > 3) ?? nombre
+      );
+    }
   }
 
   if (fecha) {
     const d = fecha instanceof Date ? fecha : new Date(fecha);
-  const mesesLargos = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const mesesLargos = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+    ];
     return mesesLargos[d.getMonth()] ?? 'Sin mes';
   }
 
@@ -357,7 +274,10 @@ function capitalizar(texto) {
 }
 
 function ordenarMesEtiqueta(a, b) {
-  const orden = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const orden = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+  ];
   return orden.indexOf(a) - orden.indexOf(b);
 }
 
@@ -378,4 +298,10 @@ export function fechaDesdePeriodo(periodo) {
     return new Date(Number(match[1]), Number(match[2]) - 1, 15);
   }
   return new Date();
+}
+
+export function inferirTipoNomina(unidadBase, tipoRelacion) {
+  if (tipoRelacion === 'honorarios_externos') return 'honorarios_externos';
+  if (unidadBase === 'Technologies') return 'sueldo_y_comisiones';
+  return 'honorarios_por_proyecto';
 }

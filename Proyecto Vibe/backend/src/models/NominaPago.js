@@ -21,11 +21,11 @@ const nominaPagoSchema = new mongoose.Schema(
     },
     estadoClasificacion: {
       type: String,
-      enum: ['auto_confirmado', 'excede_tope_revisar', 'no_encontrado'],
+      enum: ['auto_confirmado', 'manual', 'no_encontrado'],
       required: true,
     },
-    montoClasificadoBase: { type: Number, default: 0 },
-    montoExcedente: { type: Number, default: 0 },
+    unidadManual: { type: Boolean, default: false },
+    montoClasificadoBase: { type: Number, required: true },
     importacionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'ExcelImport',
@@ -36,6 +36,11 @@ const nominaPagoSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
+    },
+    editadoPor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
   },
   {

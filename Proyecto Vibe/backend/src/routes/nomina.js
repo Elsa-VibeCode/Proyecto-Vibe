@@ -5,6 +5,7 @@ import {
   obtenerResumenNomina,
   reclasificarTodosLosPagos,
   crearPagoManual,
+  actualizarPagoNomina,
   sincronizarPagosDesdeImportacion,
 } from '../services/nominaService.js';
 import { ExcelImport } from '../models/ExcelImport.js';
@@ -30,6 +31,18 @@ router.post('/pagos', requiereRol(...ROLES_EDICION), async (req, res) => {
       req.usuario._id
     );
     res.status(201).json({ pago });
+  } catch (error) {
+    res.status(400).json({ mensaje: error.message });
+  }
+});
+
+router.put('/pagos/:id', requiereRol(...ROLES_EDICION), async (req, res) => {
+  try {
+    const pago = await actualizarPagoNomina(req.params.id, req.body, req.usuario._id);
+    if (!pago) {
+      return res.status(404).json({ mensaje: 'Pago no encontrado' });
+    }
+    res.json({ pago });
   } catch (error) {
     res.status(400).json({ mensaje: error.message });
   }

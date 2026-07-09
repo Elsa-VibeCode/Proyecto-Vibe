@@ -51,12 +51,14 @@ export interface ReglaSueldo {
   notas?: string;
 }
 
+export type TipoNomina = 'honorarios_por_proyecto' | 'sueldo_y_comisiones' | 'honorarios_externos';
+
 export interface Colaborador {
   _id: string;
   nombre: string;
   unidadBase: 'Consulting' | 'Technologies' | 'Grupo';
   tipoRelacion: 'socio' | 'colaborador' | 'honorarios_externos';
-  reglasSueldo?: ReglaSueldo[];
+  tipoNomina: TipoNomina;
   notas?: string;
 }
 
@@ -69,18 +71,17 @@ export interface NominaPago {
   concepto?: string;
   responsableTransferencia?: string;
   unidadClasificada: 'Consulting' | 'Technologies' | 'Grupo' | 'sin_clasificar';
-  estadoClasificacion: 'auto_confirmado' | 'excede_tope_revisar' | 'no_encontrado';
+  estadoClasificacion: 'auto_confirmado' | 'manual' | 'no_encontrado';
+  unidadManual?: boolean;
   montoClasificadoBase?: number;
-  montoExcedente?: number;
 }
 
 export interface ResumenClasificacionNomina {
   total: number;
   autoConfirmado: number;
-  excedeTopeRevisar: number;
+  manual: number;
   noEncontrado: number;
   montoTotal: number;
-  montoExcedente: number;
   montoPorUnidad: Record<string, number>;
 }
 

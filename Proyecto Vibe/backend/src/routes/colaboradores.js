@@ -45,7 +45,7 @@ router.put('/:id', requiereRol(...ROLES_EDICION), async (req, res) => {
   if (req.body.nombre) colaborador.nombre = req.body.nombre;
   if (req.body.unidadBase) colaborador.unidadBase = req.body.unidadBase;
   if (req.body.tipoRelacion) colaborador.tipoRelacion = req.body.tipoRelacion;
-  if (req.body.reglasSueldo) colaborador.reglasSueldo = req.body.reglasSueldo;
+  if (req.body.tipoNomina) colaborador.tipoNomina = req.body.tipoNomina;
   if (req.body.notas !== undefined) colaborador.notas = req.body.notas;
   colaborador.actualizadoPor = req.usuario._id;
 

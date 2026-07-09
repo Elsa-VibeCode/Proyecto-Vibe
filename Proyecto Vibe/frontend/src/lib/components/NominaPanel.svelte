@@ -4,9 +4,10 @@
   import { api } from '$lib/api';
   import { formatearMoneda } from '$lib/excelFiltros';
   import Modal from '$lib/components/Modal.svelte';
-  import type { Colaborador, ResumenNomina } from '$lib/types/admin';
+  import type { Colaborador, NominaPago, ResumenNomina, TipoNomina } from '$lib/types/admin';
 
   type Tab = 'resumen' | 'colaboradores';
+  type UnidadPago = 'Consulting' | 'Technologies' | 'Grupo';
 
   let tab = $state<Tab>('resumen');
   let resumen = $state<ResumenNomina | null>(null);
@@ -16,7 +17,8 @@
   let mensaje = $state('');
   let reclasificando = $state(false);
   let importando = $state(false);
-  let soloRevision = $state(false);
+  let soloSinClasificar = $state(false);
+  let guardandoUnidad = $state('');
 
   let modalAbierto = $state(false);
   let modoEdicion = $state(false);
@@ -25,6 +27,7 @@
   let formNombre = $state('');
   let formUnidad = $state<Colaborador['unidadBase']>('Consulting');
   let formTipo = $state<Colaborador['tipoRelacion']>('colaborador');
+  let formTipoNomina = $state<TipoNomina>('honorarios_por_proyecto');
   let formNotas = $state('');
 
   let puedeEditar = $derived($auth.usuario?.rol === 'admin' || $auth.usuario?.rol === 'editor');
@@ -33,7 +36,7 @@
     cargando = true;
     error = '';
     const params = new URLSearchParams();
-    if (soloRevision) params.set('soloRevision', 'true');
+    if (soloSinClasificar) params.set('soloSinClasificar', 'true');
     try {
       resumen = await api<ResumenNomina>(`/nomina/resumen${params.toString() ? `?${params}` : ''}`);
     } catch (err) {
@@ -78,10 +81,10 @@
     importando = true;
     mensaje = '';
     try {
-      const data = await api<{ mensaje: string; totalDetectados?: number; sincronizados?: number }>(
-        '/nomina/importar-ultima',
-        { method: 'POST', body: JSON.stringify({}) }
-      );
+      const data = await api<{ mensaje: string }>('/nomina/importar-ultima', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
       mensaje = data.mensaje;
       await cargarNomina();
     } catch (err) {
@@ -91,15 +94,31 @@
     }
   }
 
+  async function cambiarUnidadPago(pago: NominaPago, unidad: UnidadPago) {
+    if (!puedeEditar) return;
+    guardandoUnidad = pago._id;
+    try {
+      await api(`/nomina/pagos/${pago._id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ unidadClasificada: unidad }),
+      });
+      await cargarNomina();
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'No se pudo actualizar la unidad';
+    } finally {
+      guardandoUnidad = '';
+    }
+  }
+
   function etiquetaEstado(estado: string): string {
     if (estado === 'auto_confirmado') return 'Confirmado';
-    if (estado === 'excede_tope_revisar') return 'Excede tope / revisar';
+    if (estado === 'manual') return 'Manual';
     return 'Sin clasificar';
   }
 
   function claseBadge(estado: string): string {
     if (estado === 'auto_confirmado') return 'confirmada';
-    if (estado === 'excede_tope_revisar') return 'revisar';
+    if (estado === 'manual') return 'manual';
     return 'sin-clasificar';
   }
 
@@ -109,12 +128,25 @@
     return 'Colaborador';
   }
 
+  function etiquetaTipoNomina(tipo: TipoNomina): string {
+    if (tipo === 'honorarios_por_proyecto') return 'Honorarios por proyecto';
+    if (tipo === 'sueldo_y_comisiones') return 'Sueldo y comisiones';
+    return 'Honorarios externos';
+  }
+
+  function inferirTipoNomina(unidad: Colaborador['unidadBase'], tipo: Colaborador['tipoRelacion']): TipoNomina {
+    if (tipo === 'honorarios_externos') return 'honorarios_externos';
+    if (unidad === 'Technologies') return 'sueldo_y_comisiones';
+    return 'honorarios_por_proyecto';
+  }
+
   function abrirCrear() {
     modoEdicion = false;
     editandoId = '';
     formNombre = '';
     formUnidad = 'Consulting';
     formTipo = 'colaborador';
+    formTipoNomina = 'honorarios_por_proyecto';
     formNotas = '';
     modalAbierto = true;
   }
@@ -125,6 +157,7 @@
     formNombre = item.nombre;
     formUnidad = item.unidadBase;
     formTipo = item.tipoRelacion;
+    formTipoNomina = item.tipoNomina;
     formNotas = item.notas ?? '';
     modalAbierto = true;
   }
@@ -137,13 +170,11 @@
         nombre: formNombre,
         unidadBase: formUnidad,
         tipoRelacion: formTipo,
+        tipoNomina: formTipoNomina,
         notas: formNotas,
       };
       if (modoEdicion) {
-        await api(`/colaboradores/${editandoId}`, {
-          method: 'PUT',
-          body: JSON.stringify(body),
-        });
+        await api(`/colaboradores/${editandoId}`, { method: 'PUT', body: JSON.stringify(body) });
       } else {
         await api('/colaboradores', { method: 'POST', body: JSON.stringify(body) });
       }
@@ -158,8 +189,19 @@
     }
   }
 
-  async function aplicarFiltroRevision() {
-    await cargarNomina();
+  function onCambioUnidadForm() {
+    if (formTipo !== 'honorarios_externos') {
+      formTipoNomina = inferirTipoNomina(formUnidad, formTipo);
+    }
+  }
+
+  function onCambioTipoForm() {
+    if (formTipo === 'honorarios_externos') {
+      formTipoNomina = 'honorarios_externos';
+      formUnidad = 'Grupo';
+    } else {
+      formTipoNomina = inferirTipoNomina(formUnidad, formTipo);
+    }
   }
 
   let internos = $derived(colaboradores.filter((c) => c.tipoRelacion !== 'honorarios_externos'));
@@ -170,12 +212,8 @@
   <p class="estado">Cargando nómina...</p>
 {:else}
   <div class="modulo-contenido">
-    {#if mensaje}
-      <div class="alert alert-success">{mensaje}</div>
-    {/if}
-    {#if error}
-      <div class="alert alert-error">{error}</div>
-    {/if}
+    {#if mensaje}<div class="alert alert-success">{mensaje}</div>{/if}
+    {#if error}<div class="alert alert-error">{error}</div>{/if}
 
     <div class="tabs">
       <button class:active={tab === 'resumen'} onclick={() => (tab = 'resumen')}>Resumen y pagos</button>
@@ -192,17 +230,21 @@
               {importando ? 'Importando...' : 'Sincronizar desde Nómina Real'}
             </button>
             <button class="btn btn-secondary btn-sm" disabled={reclasificando} onclick={reclasificar}>
-              {reclasificando ? 'Reclasificando...' : 'Reclasificar pagos'}
+              {reclasificando ? 'Reclasificando...' : 'Reclasificar automático'}
             </button>
           {/if}
           <label class="checkbox-label">
-            <input type="checkbox" bind:checked={soloRevision} onchange={aplicarFiltroRevision} />
-            Solo pendientes de revisión
+            <input
+              type="checkbox"
+              bind:checked={soloSinClasificar}
+              onchange={() => cargarNomina()}
+            />
+            Solo sin clasificar
           </label>
         </div>
         <p class="ayuda">
-          Importa la hoja <strong>Nómina Real 2026</strong> en
-          <a href="/datos-excel">Datos Excel</a>, luego sincroniza aquí. Los honorarios de abogado (Roberto Fuentes) están en el catálogo como externos — no se duplican en proveedores.
+          Consulting: honorarios por proyecto → 100% Consulting. Technologies: sueldo + comisiones → 100% Technologies.
+          Puedes cambiar la unidad de cualquier pago en la tabla. Los pagos manuales no se sobrescriben al reclasificar.
         </p>
       </section>
 
@@ -221,9 +263,9 @@
             <span class="stat-value activo">{resumen.clasificacion.autoConfirmado}</span>
           </div>
           <div class="stat-card card">
-            <span class="stat-label">Por revisar</span>
+            <span class="stat-label">Manual / sin clasificar</span>
             <span class="stat-value alerta">
-              {resumen.clasificacion.excedeTopeRevisar + resumen.clasificacion.noEncontrado}
+              {resumen.clasificacion.manual + resumen.clasificacion.noEncontrado}
             </span>
           </div>
         </div>
@@ -236,9 +278,7 @@
                 <thead>
                   <tr>
                     <th>Unidad</th>
-                    {#each resumen.resumenMensual.meses as mes}
-                      <th>{mes}</th>
-                    {/each}
+                    {#each resumen.resumenMensual.meses as mes}<th>{mes}</th>{/each}
                     <th>Total</th>
                   </tr>
                 </thead>
@@ -252,23 +292,13 @@
                       <td><strong>{formatearMoneda(fila.total)}</strong></td>
                     </tr>
                   {/each}
-                  <tr class="total-fila">
-                    <td><strong>Total nómina</strong></td>
-                    {#each resumen.resumenMensual.meses as mes}
-                      <td>{formatearMoneda(resumen.resumenMensual.totalPorMes[mes] ?? 0)}</td>
-                    {/each}
-                    <td><strong>{formatearMoneda(resumen.resumenMensual.granTotal)}</strong></td>
-                  </tr>
                 </tbody>
               </table>
             </div>
           </section>
         {:else}
           <section class="card tabla-vacia-panel">
-            <p>
-              Aún no hay pagos clasificados. Importa <strong>Nómina Real 2026</strong> y pulsa
-              <em>Sincronizar desde Nómina Real</em>.
-            </p>
+            <p>Importa <strong>Nómina Real 2026</strong> y pulsa <em>Sincronizar desde Nómina Real</em>.</p>
           </section>
         {/if}
 
@@ -284,18 +314,14 @@
                   <th>Concepto</th>
                   <th>Monto</th>
                   <th>Unidad</th>
-                  <th>Base</th>
-                  <th>Excedente</th>
                 </tr>
               </thead>
               <tbody>
                 {#if resumen.pagos.length === 0}
-                  <tr>
-                    <td colspan="8" class="tabla-vacia">Sin pagos registrados</td>
-                  </tr>
+                  <tr><td colspan="6" class="tabla-vacia">Sin pagos registrados</td></tr>
                 {:else}
                   {#each resumen.pagos as pago}
-                    <tr class:sin-clasificar={pago.estadoClasificacion !== 'auto_confirmado'}>
+                    <tr class:sin-clasificar={pago.estadoClasificacion === 'no_encontrado'}>
                       <td>
                         <span class="badge-clasif {claseBadge(pago.estadoClasificacion)}">
                           {etiquetaEstado(pago.estadoClasificacion)}
@@ -305,9 +331,23 @@
                       <td>{pago.periodo}</td>
                       <td>{pago.concepto || '—'}</td>
                       <td>{formatearMoneda(pago.monto)}</td>
-                      <td>{pago.unidadClasificada === 'sin_clasificar' ? 'Sin clasificar' : pago.unidadClasificada}</td>
-                      <td>{formatearMoneda(pago.montoClasificadoBase ?? 0)}</td>
-                      <td>{pago.montoExcedente ? formatearMoneda(pago.montoExcedente) : '—'}</td>
+                      <td>
+                        {#if puedeEditar}
+                          <select
+                            class="select select-sm"
+                            disabled={guardandoUnidad === pago._id}
+                            value={pago.unidadClasificada === 'sin_clasificar' ? 'Consulting' : pago.unidadClasificada}
+                            onchange={(e) =>
+                              cambiarUnidadPago(pago, e.currentTarget.value as UnidadPago)}
+                          >
+                            <option value="Consulting">Consulting</option>
+                            <option value="Technologies">Technologies</option>
+                            <option value="Grupo">Grupo</option>
+                          </select>
+                        {:else}
+                          {pago.unidadClasificada === 'sin_clasificar' ? 'Sin clasificar' : pago.unidadClasificada}
+                        {/if}
+                      </td>
                     </tr>
                   {/each}
                 {/if}
@@ -320,13 +360,9 @@
       <section class="card header-panel">
         <div>
           <h3>Catálogo de personas</h3>
-          <p class="subtitulo">
-            Socios y colaboradores para nómina. Los honorarios externos (ej. abogado) van aparte — no son colaboradores internos de plantilla.
-          </p>
+          <p class="subtitulo">El campo <strong>tipo de nómina</strong> define cómo se clasifica cada pago (sin topes).</p>
         </div>
-        {#if puedeEditar}
-          <button class="btn btn-primary" onclick={abrirCrear}>Agregar</button>
-        {/if}
+        {#if puedeEditar}<button class="btn btn-primary" onclick={abrirCrear}>Agregar</button>{/if}
       </section>
 
       <section class="card">
@@ -336,9 +372,9 @@
             <thead>
               <tr>
                 <th>Nombre</th>
-                <th>Tipo</th>
+                <th>Rol</th>
+                <th>Tipo nómina</th>
                 <th>Unidad base</th>
-                <th>Reglas</th>
                 <th>Notas</th>
                 {#if puedeEditar}<th></th>{/if}
               </tr>
@@ -348,8 +384,8 @@
                 <tr>
                   <td><strong>{item.nombre}</strong></td>
                   <td>{etiquetaTipo(item.tipoRelacion)}</td>
+                  <td>{etiquetaTipoNomina(item.tipoNomina)}</td>
                   <td>{item.unidadBase}</td>
-                  <td>{item.reglasSueldo?.length ?? 0}</td>
                   <td>{item.notas || '—'}</td>
                   {#if puedeEditar}
                     <td><button class="link" onclick={() => abrirEditar(item)}>Editar</button></td>
@@ -366,12 +402,13 @@
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Nombre</th><th>Unidad</th><th>Notas</th>{#if puedeEditar}<th></th>{/if}</tr>
+              <tr><th>Nombre</th><th>Tipo nómina</th><th>Unidad</th><th>Notas</th>{#if puedeEditar}<th></th>{/if}</tr>
             </thead>
             <tbody>
               {#each externos as item}
                 <tr>
                   <td><strong>{item.nombre}</strong></td>
+                  <td>{etiquetaTipoNomina(item.tipoNomina)}</td>
                   <td>{item.unidadBase}</td>
                   <td>{item.notas || '—'}</td>
                   {#if puedeEditar}
@@ -395,18 +432,26 @@
     </div>
     <div class="form-group">
       <label class="label" for="nom-unidad">Unidad base</label>
-      <select id="nom-unidad" class="select" bind:value={formUnidad}>
+      <select id="nom-unidad" class="select" bind:value={formUnidad} onchange={onCambioUnidadForm}>
         <option value="Consulting">Consulting</option>
         <option value="Technologies">Technologies</option>
         <option value="Grupo">Grupo</option>
       </select>
     </div>
     <div class="form-group">
-      <label class="label" for="nom-tipo">Tipo</label>
-      <select id="nom-tipo" class="select" bind:value={formTipo}>
+      <label class="label" for="nom-tipo">Rol</label>
+      <select id="nom-tipo" class="select" bind:value={formTipo} onchange={onCambioTipoForm}>
         <option value="socio">Socio</option>
         <option value="colaborador">Colaborador</option>
         <option value="honorarios_externos">Honorarios externos</option>
+      </select>
+    </div>
+    <div class="form-group full">
+      <label class="label" for="nom-tipo-nomina">Tipo de nómina</label>
+      <select id="nom-tipo-nomina" class="select" bind:value={formTipoNomina}>
+        <option value="honorarios_por_proyecto">Honorarios por proyecto (Consulting)</option>
+        <option value="sueldo_y_comisiones">Sueldo y comisiones (Technologies)</option>
+        <option value="honorarios_externos">Honorarios externos (Grupo)</option>
       </select>
     </div>
     <div class="form-group full">
@@ -443,10 +488,10 @@
   .subtitulo { color: var(--color-text-muted); font-size: 0.82rem; margin-top: 0.25rem; }
   .badge-clasif { font-size: 0.72rem; padding: 0.2rem 0.5rem; border-radius: 999px; font-weight: 600; white-space: nowrap; }
   .badge-clasif.confirmada { background: #dcfce7; color: #166534; }
-  .badge-clasif.revisar { background: #fef9c3; color: #854d0e; }
+  .badge-clasif.manual { background: #dbeafe; color: #1e40af; }
   .badge-clasif.sin-clasificar { background: #fee2e2; color: #991b1b; }
   tr.sin-clasificar, tr.sin-clasificar-fila { background: #fff7ed; }
-  .total-fila { background: #f8fafc; }
+  .select-sm { font-size: 0.8rem; padding: 0.2rem 0.35rem; min-width: 7rem; }
   .tabla-vacia { text-align: center; color: var(--color-text-muted); padding: 1rem; }
   .tabla-vacia-panel { text-align: center; color: var(--color-text-muted); }
   .link { background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: 0.8rem; }

@@ -1,7 +1,26 @@
 import { NominaPago } from '../models/NominaPago.js';
 import { obtenerIndiceColaboradores } from '../services/colaboradorSync.js';
-import { enriquecerPagoNomina, resumenClasificacionNomina, calcularResumenNominaMensual } from '../utils/nominaMotor.js';
+import {
+  enriquecerPagoNomina,
+  resumenClasificacionNomina,
+  calcularResumenNominaMensual,
+} from '../utils/nominaMotor.js';
 import { parsearNominaRealDesdeExcelImport } from '../utils/nominaParser.js';
+
+const UNIDADES_VALIDAS = new Set(['Consulting', 'Technologies', 'Grupo']);
+
+function aplicarUnidadManual(enriquecido, datos) {
+  if (datos.unidadClasificada && UNIDADES_VALIDAS.has(datos.unidadClasificada)) {
+    return {
+      ...enriquecido,
+      unidadClasificada: datos.unidadClasificada,
+      estadoClasificacion: 'manual',
+      unidadManual: true,
+      montoClasificadoBase: Number(datos.monto),
+    };
+  }
+  return enriquecido;
+}
 
 export async function sincronizarPagosDesdeImportacion(importacion, usuarioId) {
   const borrador = parsearNominaRealDesdeExcelImport(importacion);
@@ -10,8 +29,19 @@ export async function sincronizarPagosDesdeImportacion(importacion, usuarioId) {
   let omitidos = 0;
 
   for (const pago of borrador) {
+    const existente = await NominaPago.findOne({
+      claveOrigen: pago.claveOrigen,
+      subidoPor: usuarioId,
+    });
+
+    if (existente?.unidadManual) {
+      omitidos += 1;
+      continue;
+    }
+
     const enriquecido = enriquecerPagoNomina(pago, indice);
-    const claveOrigen = enriquecido.claveOrigen || `${importacion._id}|${pago.colaborador}|${pago.monto}|${pago.periodo}`;
+    const claveOrigen =
+      enriquecido.claveOrigen || `${importacion._id}|${pago.colaborador}|${pago.monto}|${pago.periodo}`;
 
     try {
       await NominaPago.findOneAndUpdate(
@@ -26,11 +56,12 @@ export async function sincronizarPagosDesdeImportacion(importacion, usuarioId) {
           responsableTransferencia: pago.responsableTransferencia ?? '',
           unidadClasificada: enriquecido.unidadClasificada,
           estadoClasificacion: enriquecido.estadoClasificacion,
+          unidadManual: false,
           montoClasificadoBase: enriquecido.montoClasificadoBase,
-          montoExcedente: enriquecido.montoExcedente,
           importacionId: importacion._id,
           claveOrigen,
           subidoPor: usuarioId,
+          $unset: { montoExcedente: '' },
         },
         { upsert: true, new: true, runValidators: true }
       );
@@ -44,7 +75,7 @@ export async function sincronizarPagosDesdeImportacion(importacion, usuarioId) {
 }
 
 export async function reclasificarTodosLosPagos(usuarioId) {
-  const pagos = await NominaPago.find({ subidoPor: usuarioId });
+  const pagos = await NominaPago.find({ subidoPor: usuarioId, unidadManual: { $ne: true } });
   const indice = await obtenerIndiceColaboradores();
   let actualizados = 0;
 
@@ -54,7 +85,7 @@ export async function reclasificarTodosLosPagos(usuarioId) {
     doc.unidadClasificada = enriquecido.unidadClasificada;
     doc.estadoClasificacion = enriquecido.estadoClasificacion;
     doc.montoClasificadoBase = enriquecido.montoClasificadoBase;
-    doc.montoExcedente = enriquecido.montoExcedente;
+    doc.unidadManual = false;
     await doc.save();
     actualizados += 1;
   }
@@ -68,8 +99,8 @@ export async function obtenerResumenNomina(usuarioId, filtros = {}) {
   if (filtros.estadoClasificacion) query.estadoClasificacion = filtros.estadoClasificacion;
   if (filtros.unidadClasificada) query.unidadClasificada = filtros.unidadClasificada;
   if (filtros.periodo) query.periodo = filtros.periodo;
-  if (filtros.soloRevision === 'true') {
-    query.estadoClasificacion = { $in: ['excede_tope_revisar', 'no_encontrado'] };
+  if (filtros.soloSinClasificar === 'true') {
+    query.estadoClasificacion = 'no_encontrado';
   }
 
   const pagos = await NominaPago.find(query).sort({ fecha: -1, colaborador: 1 }).lean();
@@ -81,7 +112,8 @@ export async function obtenerResumenNomina(usuarioId, filtros = {}) {
 
 export async function crearPagoManual(datos, usuarioId) {
   const indice = await obtenerIndiceColaboradores();
-  const enriquecido = enriquecerPagoNomina(datos, indice);
+  let enriquecido = enriquecerPagoNomina(datos, indice);
+  enriquecido = aplicarUnidadManual(enriquecido, datos);
 
   return NominaPago.create({
     colaboradorId: enriquecido.colaboradorId,
@@ -93,9 +125,44 @@ export async function crearPagoManual(datos, usuarioId) {
     responsableTransferencia: datos.responsableTransferencia ?? '',
     unidadClasificada: enriquecido.unidadClasificada,
     estadoClasificacion: enriquecido.estadoClasificacion,
+    unidadManual: enriquecido.unidadManual ?? false,
     montoClasificadoBase: enriquecido.montoClasificadoBase,
-    montoExcedente: enriquecido.montoExcedente,
     claveOrigen: datos.claveOrigen || `manual|${Date.now()}|${datos.colaborador}|${datos.monto}`,
     subidoPor: usuarioId,
+    editadoPor: enriquecido.unidadManual ? usuarioId : null,
   });
+}
+
+export async function actualizarPagoNomina(id, datos, usuarioId) {
+  const pago = await NominaPago.findOne({ _id: id, subidoPor: usuarioId });
+  if (!pago) return null;
+
+  if (datos.colaborador !== undefined) pago.colaborador = datos.colaborador;
+  if (datos.monto !== undefined) pago.monto = datos.monto;
+  if (datos.fecha !== undefined) pago.fecha = new Date(datos.fecha);
+  if (datos.periodo !== undefined) pago.periodo = datos.periodo;
+  if (datos.concepto !== undefined) pago.concepto = datos.concepto;
+  if (datos.responsableTransferencia !== undefined) {
+    pago.responsableTransferencia = datos.responsableTransferencia;
+  }
+
+  if (datos.unidadClasificada && UNIDADES_VALIDAS.has(datos.unidadClasificada)) {
+    pago.unidadClasificada = datos.unidadClasificada;
+    pago.estadoClasificacion = 'manual';
+    pago.unidadManual = true;
+    pago.montoClasificadoBase = pago.monto;
+    pago.editadoPor = usuarioId;
+  } else if (datos.reclasificar === true) {
+    const indice = await obtenerIndiceColaboradores();
+    const enriquecido = enriquecerPagoNomina(pago.toObject(), indice);
+    pago.colaboradorId = enriquecido.colaboradorId;
+    pago.unidadClasificada = enriquecido.unidadClasificada;
+    pago.estadoClasificacion = enriquecido.estadoClasificacion;
+    pago.montoClasificadoBase = enriquecido.montoClasificadoBase;
+    pago.unidadManual = false;
+    pago.editadoPor = null;
+  }
+
+  await pago.save();
+  return pago;
 }
