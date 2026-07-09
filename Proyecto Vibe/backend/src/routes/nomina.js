@@ -57,7 +57,10 @@ router.post('/importar-ultima', requiereRol(...ROLES_EDICION), async (req, res) 
 
   const resultado = await sincronizarPagosDesdeImportacion(importacion, req.usuario._id);
   res.json({
-    mensaje: `Sincronizados ${resultado.sincronizados} pagos desde ${importacion.nombreArchivo}.`,
+    mensaje:
+      resultado.totalDetectados === 0
+        ? 'No se detectaron pagos en la importación. Verifica que la hoja sea "Nómina Real 2026" y vuelve a importarla.'
+        : `Sincronizados ${resultado.sincronizados} de ${resultado.totalDetectados} pagos detectados.`,
     importacion: {
       id: importacion._id,
       nombreArchivo: importacion.nombreArchivo,

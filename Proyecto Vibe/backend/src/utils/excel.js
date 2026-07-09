@@ -46,6 +46,7 @@ const HOJAS_RECOMENDADAS = [
   'estado de cuenta',
   'conciliacion',
   'nomina',
+  'nomina real',
   'empleados',
   'colaboradores',
 ];
@@ -309,9 +310,40 @@ export function parsearConciliacion(nombreHoja, matriz) {
   };
 }
 
+function esHojaNominaReal(nombreHoja) {
+  const norm = normalizar(nombreHoja);
+  return norm.includes('nomina real');
+}
+
+export function parsearNominaRealHoja(matriz) {
+  const filas = [];
+  const maxCols = matriz.reduce((max, fila) => Math.max(max, fila?.length ?? 0), 0);
+  const columnas = Array.from({ length: maxCols }, (_, i) => `Columna_${i + 1}`);
+
+  for (const filaMatriz of matriz) {
+    if (!filaMatriz || !filaTieneDatos(filaMatriz)) continue;
+    const fila = {};
+    for (let j = 0; j < maxCols; j++) {
+      fila[columnas[j]] = filaMatriz[j] ?? '';
+    }
+    filas.push(fila);
+  }
+
+  return {
+    filaEncabezado: 1,
+    columnas,
+    filas,
+    datosEstructurados: { matriz: matriz.filter((f) => f && filaTieneDatos(f)) },
+  };
+}
+
 function parsearContenidoHoja(nombreHoja, matriz) {
   if (esHojaConciliacion(nombreHoja)) {
     return parsearConciliacion(nombreHoja, matriz);
+  }
+
+  if (esHojaNominaReal(nombreHoja)) {
+    return parsearNominaRealHoja(matriz);
   }
 
   if (esHojaMatrizMensual(nombreHoja, matriz)) {

@@ -78,10 +78,10 @@
     importando = true;
     mensaje = '';
     try {
-      const data = await api<{ mensaje: string }>('/nomina/importar-ultima', {
-        method: 'POST',
-        body: JSON.stringify({}),
-      });
+      const data = await api<{ mensaje: string; totalDetectados?: number; sincronizados?: number }>(
+        '/nomina/importar-ultima',
+        { method: 'POST', body: JSON.stringify({}) }
+      );
       mensaje = data.mensaje;
       await cargarNomina();
     } catch (err) {

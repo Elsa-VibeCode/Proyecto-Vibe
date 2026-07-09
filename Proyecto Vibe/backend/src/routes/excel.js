@@ -357,7 +357,12 @@ router.post('/importar', (req, res) => {
       }
 
       res.status(201).json({
-        mensaje: 'Archivo importado correctamente',
+        mensaje:
+          tipoHoja === 'nomina-real' && syncNomina?.totalDetectados === 0
+            ? 'Archivo importado, pero no se detectaron pagos. Revisa que sea la hoja Nómina Real 2026.'
+            : tipoHoja === 'nomina-real' && syncNomina
+              ? `Archivo importado: ${syncNomina.sincronizados} pagos sincronizados.`
+              : 'Archivo importado correctamente',
         syncNomina,
         importacion: {
           id: importacion._id,

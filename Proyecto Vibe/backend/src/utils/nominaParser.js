@@ -74,6 +74,11 @@ export function filaImportacionAVector(fila, columnas) {
 }
 
 export function parsearNominaRealDesdeExcelImport(importacion) {
+  const matriz = importacion.datosEstructurados?.matriz;
+  if (Array.isArray(matriz) && matriz.length > 0) {
+    return parsearNominaReal2026(matriz);
+  }
+
   const filas = importacion.filas ?? [];
   const columnas = importacion.columnas ?? [];
   const vectores = filas.map((fila) => filaImportacionAVector(fila, columnas));
