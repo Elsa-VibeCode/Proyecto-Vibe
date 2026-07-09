@@ -5,6 +5,10 @@ import { protegerRuta } from '../middleware/auth.js';
 import { parsearExcel, generarExcel, previsualizarLibro } from '../utils/excel.js';
 import { MapaUnidad } from '../models/MapaUnidad.js';
 import {
+  asegurarMapaUnidadesDisponible,
+  sincronizarMapaUnidadesDesdeFilas,
+} from '../services/mapaSync.js';
+import {
   enriquecerFilasFacturacion,
   resumenClasificacionFacturacion,
 } from '../utils/clasificacionMotor.js';
@@ -77,6 +81,7 @@ async function obtenerMapaColaboradoresUnidad(usuarioId) {
 }
 
 async function obtenerMapaUnidades() {
+  await asegurarMapaUnidadesDisponible();
   return MapaUnidad.find().lean();
 }
 
@@ -331,6 +336,11 @@ router.post('/importar', (req, res) => {
         datosEstructurados,
         subidoPor: req.usuario._id,
       });
+
+      if (tipoHoja === 'mapa-unidades') {
+        const mapeoMapa = detectarColumnas(columnas);
+        await sincronizarMapaUnidadesDesdeFilas(filas, mapeoMapa, req.usuario._id);
+      }
 
       if (tipoHoja === 'facturacion') {
         const mapeoFacturacion = detectarColumnas(columnas);

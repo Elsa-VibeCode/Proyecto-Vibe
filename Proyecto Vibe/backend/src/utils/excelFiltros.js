@@ -515,9 +515,7 @@ export function calcularResumenFacturacion(filas, mapeo) {
       .map(([nombre, datos]) => ({ nombre, ...datos }))
       .sort((a, b) => b.monto - a.monto);
 
-  const porUnidadOrdenado = ordenar([...porUnidad.entries()]).filter(
-    (item) => item.nombre !== 'sin_clasificar'
-  );
+  const porUnidadOrdenado = ordenar([...porUnidad.entries()]);
 
   return {
     totalFacturado: Math.round(totalFacturado),

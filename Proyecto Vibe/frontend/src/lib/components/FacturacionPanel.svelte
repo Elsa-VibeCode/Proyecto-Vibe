@@ -252,7 +252,13 @@
         </div>
         <div class="form-group checkbox-group">
           <label class="checkbox-label">
-            <input type="checkbox" bind:checked={filtros.soloSinClasificar} true-value="true" false-value="" />
+            <input
+              type="checkbox"
+              checked={filtros.soloSinClasificar === 'true'}
+              onchange={(e) => {
+                filtros.soloSinClasificar = e.currentTarget.checked ? 'true' : '';
+              }}
+            />
             Solo sin clasificar
           </label>
         </div>
@@ -289,13 +295,25 @@
               <tr><th>Unidad</th><th>Facturas</th><th>Monto</th></tr>
             </thead>
             <tbody>
-              {#each resumen.facturacion.porUnidad ?? resumen.facturacion.porArea as item}
+              {#if (resumen.facturacion.porUnidad ?? []).length === 0}
                 <tr>
-                  <td>{item.nombre}</td>
-                  <td>{item.facturas}</td>
-                  <td>{formatearMoneda(item.monto)}</td>
+                  <td colspan="3" class="tabla-vacia">
+                    Sin unidades clasificadas aún. Ve a
+                    <a href="/clasificacion">Clasificación</a> o importa la hoja
+                    <strong>Mapa Unidades</strong> en Datos Excel.
+                  </td>
                 </tr>
-              {/each}
+              {:else}
+                {#each resumen.facturacion.porUnidad ?? [] as item}
+                  <tr class:sin-clasificar-fila={item.nombre === 'sin_clasificar'}>
+                    <td>
+                      {item.nombre === 'sin_clasificar' ? 'Sin clasificar' : item.nombre}
+                    </td>
+                    <td>{item.facturas}</td>
+                    <td>{formatearMoneda(item.monto)}</td>
+                  </tr>
+                {/each}
+              {/if}
             </tbody>
           </table>
         </div>
@@ -348,6 +366,8 @@
   .badge-clasif.sin-clasificar { background: #fee2e2; color: #991b1b; }
   .badge-clasif.cancelada { background: #f1f5f9; color: #64748b; }
   tr.sin-clasificar { background: #fff7ed; }
+  tr.sin-clasificar-fila { background: #fff7ed; }
+  .tabla-vacia { text-align: center; color: var(--color-text-muted); padding: 1.25rem; font-size: 0.875rem; }
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; }
   .stat-card { padding: 1rem; display: flex; flex-direction: column; gap: 0.25rem; }
   .stat-label { font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; }

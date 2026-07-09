@@ -3,6 +3,7 @@ import { MapaUnidad } from '../models/MapaUnidad.js';
 import { MapaProveedor } from '../models/MapaProveedor.js';
 import { ExcelImport } from '../models/ExcelImport.js';
 import { protegerRuta, requiereRol } from '../middleware/auth.js';
+import { sembrarMapasSiVacios, asegurarMapaUnidadesDisponible } from '../services/mapaSync.js';
 import { detectarColumnas } from '../utils/excelFiltros.js';
 import {
   enriquecerFilasFacturacion,
@@ -15,8 +16,19 @@ const ROLES_EDICION = ['admin', 'editor'];
 router.use(protegerRuta);
 
 router.get('/unidades', async (_req, res) => {
+  await asegurarMapaUnidadesDisponible();
   const unidades = await MapaUnidad.find().sort({ clienteRazonSocial: 1 });
   res.json({ unidades });
+});
+
+router.post('/sembrar-inicial', requiereRol('admin'), async (req, res) => {
+  const resultado = await sembrarMapasSiVacios(req.usuario._id);
+  res.json({
+    mensaje: resultado.yaExistian
+      ? 'Los mapas ya tenían datos; no se sobrescribió nada.'
+      : 'Mapas iniciales cargados correctamente.',
+    ...resultado,
+  });
 });
 
 router.post('/unidades', requiereRol(...ROLES_EDICION), async (req, res) => {
