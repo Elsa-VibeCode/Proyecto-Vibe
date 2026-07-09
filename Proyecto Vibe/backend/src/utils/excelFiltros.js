@@ -783,6 +783,72 @@ export function calcularResumenEstadoCuenta(filas, mapeo, esFlujo = false, opcio
   };
 }
 
+const MESES_PERIODO = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+];
+
+export function extraerPeriodoConciliacion(importacion) {
+  const periodo = importacion.datosEstructurados?.periodo;
+  if (periodo) return String(periodo).trim();
+
+  const nombre = importacion.nombreHoja || '';
+  return nombre.replace(/^conciliaci[oó]n\s*/i, '').trim() || nombre;
+}
+
+export function indicePeriodoConciliacion(periodo) {
+  const norm = normalizar(periodo);
+  const idx = MESES_PERIODO.findIndex((mes) => norm === mes || norm.startsWith(mes));
+  return idx >= 0 ? idx : 999;
+}
+
+export function agruparImportacionesConciliacion(importaciones) {
+  const porPeriodo = new Map();
+
+  for (const importacion of importaciones) {
+    const periodo = extraerPeriodoConciliacion(importacion);
+    const key = normalizar(periodo);
+
+    if (!porPeriodo.has(key)) {
+      const resumen = importacion.datosEstructurados?.resumen ?? {};
+      porPeriodo.set(key, {
+        periodo,
+        id: String(importacion._id),
+        nombreArchivo: importacion.nombreArchivo,
+        nombreHoja: importacion.nombreHoja,
+        totalFilas: importacion.totalFilas,
+        createdAt: importacion.createdAt,
+        saldoFinalBanco: resumen.saldoFinalBanco ?? null,
+        diferenciaCargos: resumen.diferenciaCargos ?? null,
+        diferenciaAbonos: resumen.diferenciaAbonos ?? null,
+      });
+    }
+  }
+
+  return [...porPeriodo.values()].sort((a, b) => {
+    const porMes = indicePeriodoConciliacion(a.periodo) - indicePeriodoConciliacion(b.periodo);
+    if (porMes !== 0) return porMes;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+}
+
+export function buscarImportacionConciliacion(importaciones, periodoBuscado) {
+  const key = normalizar(periodoBuscado);
+  return importaciones.find(
+    (importacion) => normalizar(extraerPeriodoConciliacion(importacion)) === key
+  );
+}
+
 export function calcularResumenConciliacion(filas, mapeo, datosEstructurados = null) {
   const resumenBase = datosEstructurados?.resumen ?? {};
   const periodo = datosEstructurados?.periodo ?? '';

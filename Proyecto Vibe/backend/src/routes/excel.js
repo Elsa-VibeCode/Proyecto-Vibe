@@ -16,6 +16,8 @@ import {
   calcularResumenAportacionesGrupo,
   crearMapaColaboradoresUnidad,
   clasificarFilasEstadoCuenta,
+  agruparImportacionesConciliacion,
+  buscarImportacionConciliacion,
 } from '../utils/excelFiltros.js';
 
 const router = Router();
@@ -172,11 +174,55 @@ router.get('/', async (req, res) => {
   res.json({ importaciones });
 });
 
+router.get('/conciliaciones', async (req, res) => {
+  const importaciones = await ExcelImport.find({
+    subidoPor: req.usuario._id,
+    tipoHoja: 'conciliacion',
+  })
+    .select('nombreArchivo nombreHoja totalFilas tipoHoja datosEstructurados createdAt')
+    .sort({ createdAt: -1 });
+
+  const conciliaciones = agruparImportacionesConciliacion(importaciones);
+
+  res.json({ conciliaciones });
+});
+
 router.get('/ultima/:tipo', async (req, res) => {
   const tipo = req.params.tipo;
 
   if (!TIPOS_VALIDOS.includes(tipo)) {
     return res.status(400).json({ mensaje: 'Tipo de hoja no válido' });
+  }
+
+  let importacion = null;
+
+  if (tipo === 'conciliacion') {
+    const importaciones = await ExcelImport.find({
+      subidoPor: req.usuario._id,
+      tipoHoja: 'conciliacion',
+    }).sort({ createdAt: -1 });
+
+    if (importaciones.length === 0) {
+      return res.status(404).json({
+        mensaje:
+          'No hay importaciones de conciliación. Importa hojas como "Conciliación Enero" en Datos Excel.',
+      });
+    }
+
+    const { periodo, ...filtros } = req.query;
+    importacion = periodo
+      ? buscarImportacionConciliacion(importaciones, periodo)
+      : importaciones[0];
+
+    if (!importacion) {
+      return res.status(404).json({
+        mensaje: `No hay conciliación importada para el periodo "${periodo}".`,
+      });
+    }
+
+    const resumen = await construirResumen(importacion, filtros, req.usuario._id);
+    resumen.conciliacionesDisponibles = agruparImportacionesConciliacion(importaciones);
+    return res.json(resumen);
   }
 
   const importaciones = await ExcelImport.find({
@@ -186,7 +232,7 @@ router.get('/ultima/:tipo', async (req, res) => {
     .sort({ createdAt: -1 })
     .limit(1);
 
-  const importacion = importaciones[0];
+  importacion = importaciones[0];
 
   if (!importacion) {
     return res.status(404).json({

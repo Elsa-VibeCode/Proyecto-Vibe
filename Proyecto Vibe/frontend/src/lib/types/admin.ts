@@ -48,6 +48,7 @@ export interface ResumenModulo {
   finanzas?: ResumenFinanzas;
   estadoCuenta?: ResumenEstadoCuenta;
   conciliacion?: ResumenConciliacion;
+  conciliacionesDisponibles?: ConciliacionPeriodo[];
   aportacionesGrupo?: ResumenAportacionesGrupo;
   filas?: Record<string, unknown>[];
 }
@@ -102,6 +103,18 @@ export interface ResumenConciliacion {
   sinFactura: number;
   totalCargos: number;
   totalAbonos: number;
+}
+
+export interface ConciliacionPeriodo {
+  periodo: string;
+  id: string;
+  nombreArchivo: string;
+  nombreHoja: string;
+  totalFilas: number;
+  createdAt?: string;
+  saldoFinalBanco: number | null;
+  diferenciaCargos: number | null;
+  diferenciaAbonos: number | null;
 }
 
 export interface FiltrosEstadoCuenta {
