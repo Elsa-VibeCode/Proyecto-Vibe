@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { connectDB } from './config/db.js';
-import { normalizarClave } from '../utils/clasificacionMotor.js';
+import { normalizarClave } from './utils/clasificacionMotor.js';
 import { MapaUnidad } from './models/MapaUnidad.js';
 import { MapaProveedor } from './models/MapaProveedor.js';
 
