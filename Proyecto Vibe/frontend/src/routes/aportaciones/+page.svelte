@@ -6,7 +6,7 @@
   <header class="page-header">
     <div>
       <h1>Aportaciones al Grupo</h1>
-      <p>Cuándo aportó cada unidad a los gastos de Grupo, mes a mes, y avance del mes actual</p>
+      <p>Cuándo aportó cada unidad a los gastos de Grupo — compara Excel histórico vs. flujo calculado desde facturación y nómina</p>
     </div>
   </header>
   <AportacionesPanel />

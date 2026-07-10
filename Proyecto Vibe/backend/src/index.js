@@ -10,6 +10,7 @@ import excelRoutes from './routes/excel.js';
 import mapasRoutes from './routes/mapas.js';
 import colaboradoresRoutes from './routes/colaboradores.js';
 import nominaRoutes from './routes/nomina.js';
+import flujoRoutes from './routes/flujo.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -62,6 +63,7 @@ app.use('/api/excel', excelRoutes);
 app.use('/api/mapas', mapasRoutes);
 app.use('/api/colaboradores', colaboradoresRoutes);
 app.use('/api/nomina', nominaRoutes);
+app.use('/api/flujo', flujoRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ mensaje: 'Ruta no encontrada' });

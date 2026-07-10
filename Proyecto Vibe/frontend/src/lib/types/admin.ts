@@ -91,6 +91,62 @@ export interface ResumenNomina {
 }
 
 export interface IngresoMes {
+  mes: string;
+  ingresos: number;
+  neto: number;
+  porcentaje: number;
+}
+
+export interface ConfiguracionFlujo {
+  saldoAperturaConsulting: number;
+  saldoAperturaTechnologies: number;
+  saldoAperturaGrupo: number;
+  porcentajeAporteOficial: number;
+  actualizadoEn?: string;
+}
+
+export interface MesFlujo {
+  periodo: string;
+  etiqueta: string;
+  ingresos: { consulting: number; technologies: number; grupo: number };
+  egresos: {
+    consultingNomina: number;
+    technologiesNomina: number;
+    grupoDirecto: number;
+  };
+  resultadoNeto: {
+    consulting: number;
+    technologies: number;
+    grupo: number;
+    total: number;
+  };
+  saldoAcumulado: {
+    consulting: number;
+    technologies: number;
+    grupo: number;
+    total: number;
+  };
+  aportacionOficial: number;
+  egresosTotalesACubrir: number;
+  porcentajeCoberturaOficial: number;
+  registrosPendientes: number;
+  totalRegistrosMes: number;
+  mesEnCurso: boolean;
+  advertenciaIncompleto: boolean;
+}
+
+export interface ResumenFlujo {
+  configuracion: ConfiguracionFlujo;
+  historialMensual: MesFlujo[];
+  mesActual: string;
+  resumenActual: MesFlujo | null;
+  totales: {
+    aportacionOficialAcumulada: number;
+    egresosTotalesACubrirAcumulados: number;
+    porcentajeCoberturaAcumulado: number;
+  };
+  necesitaRecalculo: boolean;
+}
 
 export interface ResumenFinanzas {
   meses: string[];

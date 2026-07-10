@@ -107,6 +107,49 @@ export function enriquecerFilasFacturacion(filas, mapeo, mapaUnidades = []) {
   });
 }
 
+export function clasificarFilaEgresoProveedor(fila, mapeo, indiceProveedores) {
+  const contraparte = String(
+    (mapeo.contraparte ? fila[mapeo.contraparte] : null) ??
+      (mapeo.conceptoMovimiento ? fila[mapeo.conceptoMovimiento] : null) ??
+      (mapeo.conceptoFactura ? fila[mapeo.conceptoFactura] : null) ??
+      ''
+  ).trim();
+
+  if (!contraparte) {
+    return {
+      unidadClasificada: 'sin_clasificar',
+      estadoClasificacion: 'no_encontrado',
+    };
+  }
+
+  const clave = normalizarClave(contraparte);
+  let entrada = indiceProveedores.get(clave);
+
+  if (!entrada) {
+    for (const [key, valor] of indiceProveedores.entries()) {
+      if (clave.includes(key) || key.includes(clave)) {
+        entrada = valor;
+        break;
+      }
+    }
+  }
+
+  if (!entrada) {
+    return {
+      unidadClasificada: 'sin_clasificar',
+      estadoClasificacion: 'no_encontrado',
+    };
+  }
+
+  const estadoClasificacion =
+    entrada.estado === 'confirmado' ? 'auto_confirmado' : 'por_confirmar';
+
+  return {
+    unidadClasificada: normalizarUnidad(entrada.unidad),
+    estadoClasificacion,
+  };
+}
+
 export function resumenClasificacionFacturacion(filas) {
   const resumen = {
     total: filas.length,
