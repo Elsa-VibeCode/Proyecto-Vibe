@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Factura, unidadEfectiva, mesDesdeFecha } from '../models/Factura.js';
+import { Factura, unidadEfectiva, mesDesdeFecha, esFechaFacturaValida } from '../models/Factura.js';
 import { ExcelImport } from '../models/ExcelImport.js';
 import { MapaUnidad } from '../models/MapaUnidad.js';
 import {
@@ -12,6 +12,8 @@ import { asegurarMapaUnidadesDisponible } from './mapaSync.js';
 import { detectarColumnas, parsearNumero } from '../utils/excelFiltros.js';
 
 const redondear = (v) => Math.round((Number(v) || 0) * 100) / 100;
+
+const UNIDADES_CLASIFICABLES = new Set(['Consulting', 'Technologies', 'Grupo']);
 
 export function normalizarRfcEmisor(valor) {
   const v = String(valor ?? '').trim().toUpperCase();
@@ -57,6 +59,33 @@ export function clasificarPorCliente(cliente, indice) {
   const entrada = indice.get(normalizarClave(nombre));
   if (!entrada) return { unidad: null, clasificacionAuto: false };
   return { unidad: normalizarUnidad(entrada.unidad), clasificacionAuto: true };
+}
+
+/** Asigna unidad de negocio a una factura concreta (no afecta al resto del cliente). */
+export async function clasificarFactura(id, unidad) {
+  if (!UNIDADES_CLASIFICABLES.has(unidad)) {
+    throw new Error('Unidad inválida. Use Consulting, Technologies o Grupo.');
+  }
+  const factura = await Factura.findById(id);
+  if (!factura) return null;
+  factura.unidad = unidad;
+  factura.unidadManual = true;
+  factura.clasificacionAuto = false;
+  await factura.save();
+  return factura;
+}
+
+/** Re-aplica el mapa de clientes a facturas no marcadas como manuales. */
+export async function reclasificarFacturasDesdeMapa() {
+  const indice = await construirIndiceMapa();
+  const facturas = await Factura.find({ unidadManual: { $ne: true } }).select('_id cliente').lean();
+  let actualizadas = 0;
+  for (const f of facturas) {
+    const { unidad, clasificacionAuto } = clasificarPorCliente(f.cliente, indice);
+    await Factura.updateOne({ _id: f._id }, { $set: { unidad, clasificacionAuto } });
+    actualizadas += 1;
+  }
+  return { actualizadas, total: facturas.length };
 }
 
 // ---- Normalización de estatus (texto libre del Excel → enum) ----
@@ -200,14 +229,15 @@ export async function totalesFacturas(filtros = {}) {
 
 export async function mesesFacturacionDisponibles() {
   const meses = await Factura.distinct('mes');
-  return meses.filter(Boolean).sort((a, b) => b.localeCompare(a));
+  return meses.filter((m) => m && m >= '2000-01').sort((a, b) => b.localeCompare(a));
 }
 
 export async function mesesPagoDisponibles() {
   const resultado = await Factura.aggregate([
-    { $match: { fechaPago: { $ne: null } } },
+    { $match: { fechaPago: { $ne: null, $gte: new Date('2000-01-01T00:00:00.000Z') } } },
     { $project: { mes: { $dateToString: { format: '%Y-%m', date: '$fechaPago' } } } },
     { $group: { _id: '$mes' } },
+    { $match: { _id: { $gte: '2000-01' } } },
     { $sort: { _id: -1 } },
   ]);
   return resultado.map((m) => m._id).filter(Boolean);
@@ -261,6 +291,11 @@ export async function migrarFacturasDesdeExcel({ dryRun = false } = {}) {
     return { ok: false, error: 'No hay ninguna importación de tipo "facturacion" en ExcelImport.' };
   }
 
+  // Limpia registros con fecha placeholder (epoch 1970) de migraciones anteriores.
+  if (!dryRun) {
+    await Factura.deleteMany({ fechaFacturacion: { $lt: new Date('2000-01-01T00:00:00.000Z') } });
+  }
+
   const mapeo = detectarColumnas(importacion.columnas ?? []);
   const indice = await construirIndiceMapa();
   const columnaMonto = mapeo.total || mapeo.subtotal;
@@ -279,6 +314,7 @@ export async function migrarFacturasDesdeExcel({ dryRun = false } = {}) {
     canceladas: 0,
     duplicadosEnFuente: 0,
     omitidasSinDatos: 0,
+    omitidasSinFecha: 0,
     porUnidad: { Consulting: 0, Technologies: 0, Grupo: 0, sin_clasificar: 0 },
     alertas: {
       totalCero: [],
@@ -303,14 +339,33 @@ export async function migrarFacturasDesdeExcel({ dryRun = false } = {}) {
 
     resumen.procesadas += 1;
 
-    const fecha = aFecha(val(fila, 'fechaFacturacion')) || aFecha(val(fila, 'fechaMovimiento'));
+    const fechaPagoParsed = aFecha(val(fila, 'fechaPago'));
+    let fechaFacturacion =
+      aFecha(val(fila, 'fechaFacturacion')) || aFecha(val(fila, 'fechaMovimiento'));
+    // Sin fecha de facturación en Excel → usar fecha de pago si existe (evita epoch 1970).
+    if (!esFechaFacturaValida(fechaFacturacion) && esFechaFacturaValida(fechaPagoParsed)) {
+      fechaFacturacion = fechaPagoParsed;
+    }
+    if (!esFechaFacturaValida(fechaFacturacion)) {
+      if (resumen.alertas.sinFecha.length < 20) {
+        resumen.alertas.sinFecha.push({
+          noFactura: String(val(fila, 'noFactura') ?? '').trim() || '(sin folio)',
+          cliente: cliente || 'Sin cliente',
+        });
+      }
+      resumen.omitidasSinFecha += 1;
+      continue;
+    }
+
     const subtotal = parsearNumero(val(fila, 'subtotal')) ?? 0;
     const iva = parsearNumero(val(fila, 'iva')) ?? 0;
     const total = parsearNumero(val(fila, 'total')) ?? redondear(subtotal + iva);
     const concepto = String(val(fila, 'conceptoFactura') ?? val(fila, 'conceptoMovimiento') ?? '').trim();
 
     const noFacturaRaw = String(val(fila, 'noFactura') ?? '').trim();
-    const noFactura = noFacturaRaw || folioSintetico(cliente, fecha?.toISOString(), total, concepto);
+    const noFactura =
+      noFacturaRaw ||
+      folioSintetico(cliente, fechaFacturacion.toISOString(), total, concepto);
 
     if (foliosVistos.has(noFactura)) {
       resumen.duplicadosEnFuente += 1;
@@ -340,23 +395,16 @@ export async function migrarFacturasDesdeExcel({ dryRun = false } = {}) {
         resumen.alertas.sinCliente.push({ noFactura, total: totalFinal });
       }
     }
-    if (!fecha) {
-      if (resumen.alertas.sinFecha.length < 20) {
-        resumen.alertas.sinFecha.push({ noFactura, cliente: cliente || 'Sin cliente' });
-      }
-    }
     if (totalFinal === 0) {
       if (resumen.alertas.totalCero.length < 20) {
         resumen.alertas.totalCero.push({ noFactura, cliente: cliente || 'Sin cliente' });
       }
     }
 
-    const fechaFacturacion = fecha || new Date(0);
     const doc = {
       fechaFacturacion,
-      // findOneAndUpdate no dispara el hook pre('validate'), así que calculamos mes aquí.
       mes: mesDesdeFecha(fechaFacturacion),
-      fechaPago: aFecha(val(fila, 'fechaPago')),
+      fechaPago: esFechaFacturaValida(fechaPagoParsed) ? fechaPagoParsed : null,
       noFactura,
       cliente: cliente || 'Sin cliente',
       concepto,
@@ -372,12 +420,21 @@ export async function migrarFacturasDesdeExcel({ dryRun = false } = {}) {
     };
 
     if (!dryRun) {
-      await Factura.findOneAndUpdate({ noFactura }, doc, {
-        upsert: true,
-        new: true,
-        setDefaultsOnInsert: true,
-        runValidators: true,
-      });
+      const existente = await Factura.findOne({ noFactura }).select('unidadManual').lean();
+      if (existente?.unidadManual) {
+        const { unidad: _u, clasificacionAuto: _c, ...docSinClasif } = doc;
+        await Factura.findOneAndUpdate({ noFactura }, docSinClasif, {
+          new: true,
+          runValidators: true,
+        });
+      } else {
+        await Factura.findOneAndUpdate({ noFactura }, doc, {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true,
+          runValidators: true,
+        });
+      }
     }
     resumen.migradas += 1;
   }

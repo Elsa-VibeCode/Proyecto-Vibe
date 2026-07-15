@@ -2,9 +2,11 @@ import { Router } from 'express';
 import { MapaUnidad } from '../models/MapaUnidad.js';
 import { MapaProveedor } from '../models/MapaProveedor.js';
 import { ExcelImport } from '../models/ExcelImport.js';
+import { Factura } from '../models/Factura.js';
 import { protegerRuta, requiereRol } from '../middleware/auth.js';
 import { sembrarMapasSiVacios, asegurarMapaUnidadesDisponible } from '../services/mapaSync.js';
 import { detectarColumnas } from '../utils/excelFiltros.js';
+import { reclasificarFacturasDesdeMapa } from '../services/facturaService.js';
 import {
   enriquecerFilasFacturacion,
   resumenClasificacionFacturacion,
@@ -131,6 +133,15 @@ router.delete('/proveedores/:id', requiereRol(...ROLES_EDICION), async (req, res
 });
 
 router.post('/reclasificar-facturacion', requiereRol(...ROLES_EDICION), async (req, res) => {
+  const totalFacturas = await Factura.countDocuments();
+  if (totalFacturas > 0) {
+    const resultado = await reclasificarFacturasDesdeMapa();
+    return res.json({
+      mensaje: `Facturación reclasificada (${resultado.actualizadas} facturas; las manuales no se modificaron)`,
+      facturasActualizadas: resultado.actualizadas,
+    });
+  }
+
   const importacion = await ExcelImport.findOne({
     subidoPor: req.usuario._id,
     tipoHoja: 'facturacion',

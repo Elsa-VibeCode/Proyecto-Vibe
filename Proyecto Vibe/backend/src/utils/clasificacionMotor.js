@@ -155,6 +155,7 @@ export function resumenClasificacionFacturacion(filas) {
     total: filas.length,
     autoConfirmado: 0,
     porConfirmar: 0,
+    manual: 0,
     noEncontrado: 0,
     cancelados: 0,
     activos: 0,
@@ -166,6 +167,7 @@ export function resumenClasificacionFacturacion(filas) {
 
     if (fila.estadoClasificacion === 'auto_confirmado') resumen.autoConfirmado += 1;
     else if (fila.estadoClasificacion === 'por_confirmar') resumen.porConfirmar += 1;
+    else if (fila.estadoClasificacion === 'manual') resumen.manual = (resumen.manual ?? 0) + 1;
     else if (fila.estadoClasificacion === 'no_encontrado') resumen.noEncontrado += 1;
   }
 

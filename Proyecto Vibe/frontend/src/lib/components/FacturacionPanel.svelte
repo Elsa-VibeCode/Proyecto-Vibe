@@ -4,7 +4,7 @@
   import { api } from '$lib/api';
   import { formatearMoneda } from '$lib/excelFiltros';
   import { formatearFecha } from '$lib/utils';
-  import type { FiltrosFacturacion, ResumenModulo } from '$lib/types/admin';
+  import type { FiltrosFacturacion, ResumenModulo, UnidadFactura } from '$lib/types/admin';
   import {
     filtrosFacturacionVacios,
     cargarFiltrosFacturacionGuardados,
@@ -15,6 +15,7 @@
   let error = $state('');
   let cargando = $state(true);
   let reclasificando = $state(false);
+  let guardandoUnidad = $state('');
   let mensaje = $state('');
   let filtros = $state<FiltrosFacturacion>(filtrosFacturacionVacios());
   let opcionesFiltro = $state({
@@ -36,7 +37,7 @@
   function mesDeValor(valor: unknown): string {
     if (valor === null || valor === undefined || valor === '') return '';
     const d = valor instanceof Date ? valor : new Date(String(valor));
-    if (Number.isNaN(d.getTime())) return '';
+    if (Number.isNaN(d.getTime()) || d.getTime() <= 0 || d.getUTCFullYear() < 2000) return '';
     return d.toISOString().slice(0, 7);
   }
 
@@ -193,6 +194,8 @@
     }
     if (columna === m?.fechaFacturacion || columna === m?.fechaPago) {
       if (valor === null || valor === undefined || valor === '') return '';
+      const d = valor instanceof Date ? valor : new Date(String(valor));
+      if (Number.isNaN(d.getTime()) || d.getTime() <= 0 || d.getUTCFullYear() < 2000) return 'Sin fecha';
       const iso =
         valor instanceof Date
           ? valor.toISOString()
@@ -224,9 +227,27 @@
     }
   }
 
+  async function cambiarUnidadFactura(fila: Record<string, unknown>, unidad: UnidadFactura) {
+    const facturaId = String(fila.facturaId ?? '');
+    if (!puedeEditar || !facturaId) return;
+    guardandoUnidad = facturaId;
+    try {
+      await api(`/facturas/${facturaId}/clasificar`, {
+        method: 'PATCH',
+        body: JSON.stringify({ unidad }),
+      });
+      await cargarDatos(false);
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'No se pudo actualizar la unidad';
+    } finally {
+      guardandoUnidad = '';
+    }
+  }
+
   function etiquetaClasificacion(fila: Record<string, unknown>): string {
     if (fila.excluidoDeTotales) return 'Cancelada';
     if (fila.estadoClasificacion === 'no_encontrado') return 'Sin clasificar';
+    if (fila.estadoClasificacion === 'manual') return 'Manual';
     if (fila.estadoClasificacion === 'por_confirmar') return 'Por confirmar';
     return String(fila.unidadClasificada ?? 'Consulting');
   }
@@ -234,6 +255,7 @@
   function claseBadge(fila: Record<string, unknown>): string {
     if (fila.excluidoDeTotales) return 'cancelada';
     if (fila.estadoClasificacion === 'no_encontrado') return 'sin-clasificar';
+    if (fila.estadoClasificacion === 'manual') return 'manual';
     if (fila.estadoClasificacion === 'por_confirmar') return 'por-confirmar';
     return 'confirmada';
   }
@@ -271,9 +293,10 @@
       {#if resumen.clasificacionFacturacion}
         {@const c = resumen.clasificacionFacturacion.resumen}
         <p class="clasificacion-meta">
-          Clasificación automática:
-          {c.autoConfirmado} confirmadas · {c.porConfirmar} por confirmar ·
-          <strong class="alerta">{c.noEncontrado} sin clasificar</strong>
+          Clasificación:
+          {c.autoConfirmado} confirmadas · {c.porConfirmar} por confirmar
+          {#if (c.manual ?? 0) > 0}· {c.manual} manual{/if}
+          · <strong class="alerta">{c.noEncontrado} sin clasificar</strong>
           {#if c.cancelados > 0}· {c.cancelados} canceladas (excluidas de totales){/if}
         </p>
         {#if !resumen.clasificacionFacturacion.mapaCargado}
@@ -290,20 +313,24 @@
         <h3>Cómo editar como Editor</h3>
         <ul>
           <li>
-            <strong>Cambiar unidad</strong> (Consulting, Technologies, Grupo): ve a
-            <a href="/clasificacion">Clasificación</a> → pestaña Clientes →
-            <em>Agregar entrada</em> o <em>Editar</em> el cliente. Luego pulsa
-            <strong>Reclasificar pendientes</strong> aquí arriba.
+            <strong>Unidad por factura</strong> (Consulting, Technologies, Grupo): elige la unidad en
+            la columna <em>Unidad</em> de cada fila. Útil cuando un mismo cliente (ej. ENLAC) factura
+            a distintas unidades. Las asignaciones manuales no se sobrescriben al reclasificar.
           </li>
           <li>
-            <strong>Estatus de pago</strong> (Pagado / Pendiente): no se edita en esta pantalla;
-            actualiza el Excel y vuelve a importarlo en <a href="/datos-excel">Datos Excel</a>.
+            <strong>Regla por cliente</strong> (todas las facturas del cliente): ve a
+            <a href="/clasificacion">Clasificación</a> → Clientes → agrega o edita el cliente, luego
+            <strong>Reclasificar pendientes</strong>.
+          </li>
+          <li>
+            <strong>Estatus de pago</strong> (Pagado / Pendiente): actualiza el Excel en
+            <a href="/datos-excel">Datos Excel</a> y vuelve a migrar.
           </li>
         </ul>
         {#if haySinClasificar}
           <p class="aviso-sin-clasificar">
-            Hay facturas sin clasificar. El nombre del cliente en Facturación debe coincidir con el
-            mapa en Clasificación (ej. <em>ACHIEVEMENT SERVIDOR</em> ≠ <em>BLUEWOLF ACHIEVEMENT</em>).
+            Hay facturas sin clasificar. Asigna la unidad en la tabla o agrega el cliente al mapa en
+            <a href="/clasificacion">Clasificación</a>.
           </p>
         {/if}
       </section>
@@ -407,6 +434,7 @@
             <option value="">Todas</option>
             <option value="auto_confirmado">Auto confirmadas</option>
             <option value="por_confirmar">Por confirmar</option>
+            <option value="manual">Manual</option>
             <option value="no_encontrado">Sin clasificar</option>
           </select>
         </div>
@@ -489,7 +517,11 @@
         <table>
           <thead>
             <tr>
-              <th>Clasificación</th>
+              <th>Estado</th>
+              <th class="col-unidad">
+                Unidad
+                {#if puedeEditar}<span class="col-editar" title="Editable por factura">✎</span>{/if}
+              </th>
               {#each columnasTabla() as columna}
                 <th>{columna}</th>
               {/each}
@@ -500,10 +532,34 @@
               <tr class:sin-clasificar={fila.estadoClasificacion === 'no_encontrado'}>
                 <td>
                   <span class="badge-clasif {claseBadge(fila)}">{etiquetaClasificacion(fila)}</span>
-                  {#if puedeEditar && fila.estadoClasificacion === 'no_encontrado'}
+                  {#if puedeEditar && fila.estadoClasificacion === 'no_encontrado' && !fila.facturaId}
                     <a class="link-clasificar" href="/clasificacion" title="Agregar cliente al mapa">
-                      Clasificar →
+                      Mapa →
                     </a>
+                  {/if}
+                </td>
+                <td class="celda-unidad">
+                  {#if fila.facturaId}
+                    <select
+                      class="select select-unidad"
+                      class:select-editable={puedeEditar}
+                      disabled={!puedeEditar || guardandoUnidad === String(fila.facturaId)}
+                      value={fila.unidadClasificada === 'sin_clasificar' ? 'sin_clasificar' : String(fila.unidadClasificada ?? 'sin_clasificar')}
+                      onchange={(e) => {
+                        const valor = e.currentTarget.value;
+                        if (valor === 'sin_clasificar') return;
+                        cambiarUnidadFactura(fila, valor as UnidadFactura);
+                      }}
+                    >
+                      <option value="sin_clasificar" disabled={fila.unidadClasificada !== 'sin_clasificar'}>
+                        Sin clasificar
+                      </option>
+                      <option value="Consulting">Consulting</option>
+                      <option value="Technologies">Technologies</option>
+                      <option value="Grupo">Grupo</option>
+                    </select>
+                  {:else}
+                    {fila.unidadClasificada === 'sin_clasificar' ? '—' : String(fila.unidadClasificada ?? '—')}
                   {/if}
                 </td>
                 {#each columnasTabla() as columna}
@@ -535,6 +591,7 @@
   .checkbox-label { display: flex; gap: 0.5rem; align-items: center; font-size: 0.875rem; }
   .badge-clasif { font-size: 0.72rem; padding: 0.2rem 0.5rem; border-radius: 999px; font-weight: 600; white-space: nowrap; }
   .badge-clasif.confirmada { background: #dcfce7; color: #166534; }
+  .badge-clasif.manual { background: #dbeafe; color: #1e40af; }
   .badge-clasif.por-confirmar { background: #fef9c3; color: #854d0e; }
   .badge-clasif.sin-clasificar { background: #fee2e2; color: #991b1b; }
   .badge-clasif.cancelada { background: #f1f5f9; color: #64748b; }
@@ -558,4 +615,11 @@
   .ayuda { margin-top: 0.5rem; font-size: 0.875rem; }
   .link { color: var(--color-primary); font-weight: 600; background: none; border: none; cursor: pointer; }
   .btn-sm { margin-top: 0.25rem; }
+  .col-unidad { white-space: nowrap; }
+  .col-editar { font-size: 0.75rem; opacity: 0.7; margin-left: 0.2rem; }
+  .celda-unidad { min-width: 9rem; }
+  .select-unidad { font-size: 0.8rem; padding: 0.25rem 0.4rem; min-width: 8.5rem; width: 100%; }
+  .select-unidad:not(.select-editable) { appearance: none; border: none; background: transparent; color: inherit; pointer-events: none; padding-left: 0; }
+  .select-unidad.select-editable { border: 1px solid var(--color-border); border-radius: 6px; background: white; cursor: pointer; }
+  .select-unidad.select-editable:focus { outline: 2px solid var(--color-primary); outline-offset: 1px; }
 </style>

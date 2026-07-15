@@ -419,7 +419,8 @@ function esPagado(estatus) {
 function mesDeValor(valor) {
   if (valor === null || valor === undefined || valor === '') return '';
   if (valor instanceof Date) {
-    return Number.isNaN(valor.getTime()) ? '' : valor.toISOString().slice(0, 7);
+    if (Number.isNaN(valor.getTime()) || valor.getTime() <= 0 || valor.getUTCFullYear() < 2000) return '';
+    return valor.toISOString().slice(0, 7);
   }
   const texto = String(valor).trim();
   const mesesAbrev = {
@@ -434,7 +435,8 @@ function mesDeValor(valor) {
     if (mes) return `${anio}-${mes}`;
   }
   const d = new Date(valor);
-  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 7);
+  if (Number.isNaN(d.getTime()) || d.getTime() <= 0 || d.getUTCFullYear() < 2000) return '';
+  return d.toISOString().slice(0, 7);
 }
 
 export function filtrarFilas(filas, mapeo, filtros = {}) {
