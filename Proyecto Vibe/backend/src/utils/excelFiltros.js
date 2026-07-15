@@ -39,6 +39,7 @@ const ORDEN_CAMPOS = [
   'enFacturas',
   'estatusEnvio',
   'estatusPago',
+  'rfcEmisor',
   'colaborador',
   'cliente',
   'unidad',
@@ -72,6 +73,7 @@ const PATRONES = {
   enFacturas: ['en facturas', '¿en facturas?'],
   estatusEnvio: ['estatus de envio', 'estatus de envío', 'estatus envio'],
   estatusPago: ['estatus de pago', 'estatus pago'],
+  rfcEmisor: ['rfc emisor', 'emisor'],
   colaborador: ['colaborador', 'empleado', 'nombre completo', 'trabajador'],
   cliente: [
     'cliente',
@@ -145,6 +147,7 @@ export function detectarColumnas(columnas) {
     enFacturas: null,
     estatusEnvio: null,
     estatusPago: null,
+    rfcEmisor: null,
     colaborador: null,
     cliente: null,
     unidad: null,

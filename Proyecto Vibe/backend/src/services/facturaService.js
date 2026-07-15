@@ -13,6 +13,28 @@ import { detectarColumnas, parsearNumero } from '../utils/excelFiltros.js';
 
 const redondear = (v) => Math.round((Number(v) || 0) * 100) / 100;
 
+export function normalizarRfcEmisor(valor) {
+  const v = String(valor ?? '').trim().toUpperCase();
+  if (v === 'GAVM') return 'GAVM';
+  if (v === 'GBL' || v.startsWith('GBL')) return 'GBL';
+  return v ? 'OTRO' : 'GBL';
+}
+
+// Strategy (legacy) → Consulting al persistir. Valores fuera del enum → null.
+function unidadValidaParaFactura(unidad) {
+  if (!unidad) return null;
+  const u = normalizarUnidad(unidad);
+  if (u === 'Consulting' || u === 'Technologies' || u === 'Grupo') return u;
+  if (u === 'Strategy') return 'Consulting';
+  return null;
+}
+
+function unidadDesdeMigracion(unidadMapa, areaVentaExcel) {
+  const desdeMapa = unidadValidaParaFactura(unidadMapa);
+  if (desdeMapa) return desdeMapa;
+  return unidadValidaParaFactura(areaVentaExcel);
+}
+
 // IVA: 16% salvo excepción NOVAMEX (factura USD) → IVA 0.
 export function calcularIva(subtotal, cliente) {
   const base = Number(subtotal) || 0;
@@ -84,7 +106,10 @@ export function construirFiltroFacturas({ mes, unidad, cliente, estatusPago, sin
 
 // ---- Totales por mes ----
 export async function totalesFacturas(mes) {
-  const match = { estatusPago: { $ne: 'CANCELADO' } };
+  const match = {
+    estatusPago: { $ne: 'CANCELADO' },
+    estatusEnvio: { $ne: 'CANCELADA' },
+  };
   if (mes) match.mes = mes;
 
   const facturas = await Factura.find(match).select('unidad total estatusPago').lean();
@@ -162,6 +187,13 @@ export async function migrarFacturasDesdeExcel({ dryRun = false } = {}) {
     canceladas: 0,
     duplicadosEnFuente: 0,
     omitidasSinDatos: 0,
+    porUnidad: { Consulting: 0, Technologies: 0, Grupo: 0, sin_clasificar: 0 },
+    alertas: {
+      totalCero: [],
+      sinCliente: [],
+      sinFecha: [],
+    },
+    duplicados: [],
     dryRun,
   };
 
@@ -190,14 +222,42 @@ export async function migrarFacturasDesdeExcel({ dryRun = false } = {}) {
 
     if (foliosVistos.has(noFactura)) {
       resumen.duplicadosEnFuente += 1;
+      if (resumen.duplicados.length < 50) {
+        resumen.duplicados.push({ noFactura, cliente });
+      }
       continue;
     }
     foliosVistos.add(noFactura);
 
     const cancelada = esRegistroCancelado(fila, mapeo);
-    const { unidad, clasificacionAuto } = clasificarPorCliente(cliente, indice);
+    const areaVentaExcel = String(val(fila, 'areaVenta') ?? '').trim();
+    const { unidad: unidadMapa, clasificacionAuto: autoMapa } = clasificarPorCliente(cliente, indice);
+    const unidad = unidadDesdeMigracion(unidadMapa, areaVentaExcel);
+    const clasificacionAuto = autoMapa && unidad !== null;
+    const unidadEfectivaConteo = unidadEfectiva(unidad);
+    resumen.porUnidad[unidadEfectivaConteo] = (resumen.porUnidad[unidadEfectivaConteo] || 0) + 1;
     if (!unidad) resumen.sinClasificar += 1;
     if (cancelada) resumen.canceladas += 1;
+
+    const ivaFinal = /novamex/i.test(cliente) ? 0 : redondear(iva ?? calcularIva(subtotal, cliente));
+    const totalFinal =
+      /novamex/i.test(cliente) ? redondear(subtotal) : redondear(total ?? subtotal + ivaFinal);
+
+    if (!cliente) {
+      if (resumen.alertas.sinCliente.length < 20) {
+        resumen.alertas.sinCliente.push({ noFactura, total: totalFinal });
+      }
+    }
+    if (!fecha) {
+      if (resumen.alertas.sinFecha.length < 20) {
+        resumen.alertas.sinFecha.push({ noFactura, cliente: cliente || 'Sin cliente' });
+      }
+    }
+    if (totalFinal === 0) {
+      if (resumen.alertas.totalCero.length < 20) {
+        resumen.alertas.totalCero.push({ noFactura, cliente: cliente || 'Sin cliente' });
+      }
+    }
 
     const fechaFacturacion = fecha || new Date(0);
     const doc = {
@@ -210,11 +270,11 @@ export async function migrarFacturasDesdeExcel({ dryRun = false } = {}) {
       concepto,
       unidad,
       subtotal: redondear(subtotal),
-      iva: redondear(iva),
-      total: redondear(total),
+      iva: ivaFinal,
+      total: totalFinal,
       estatusEnvio: cancelada ? 'CANCELADA' : normalizarEstatusEnvio(val(fila, 'estatusEnvio')),
       estatusPago: cancelada ? 'CANCELADO' : normalizarEstatusPago(val(fila, 'estatusPago')),
-      rfcEmisor: 'GBL',
+      rfcEmisor: normalizarRfcEmisor(val(fila, 'rfcEmisor')),
       clasificacionAuto,
       origen: 'excel-migracion',
     };

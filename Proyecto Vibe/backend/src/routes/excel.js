@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { ExcelImport } from '../models/ExcelImport.js';
+import { Factura } from '../models/Factura.js';
 import { protegerRuta } from '../middleware/auth.js';
 import { parsearExcel, generarExcel, previsualizarLibro } from '../utils/excel.js';
 import { MapaUnidad } from '../models/MapaUnidad.js';
@@ -9,6 +10,10 @@ import {
   sincronizarMapaUnidadesDesdeFilas,
 } from '../services/mapaSync.js';
 import { sincronizarPagosDesdeImportacion } from '../services/nominaService.js';
+import {
+  facturasComoFilasExcel,
+  resumenClasificacionDesdeFilas,
+} from '../services/facturaFacturacionAdapter.js';
 import {
   enriquecerFilasFacturacion,
   resumenClasificacionFacturacion,
@@ -108,12 +113,20 @@ async function construirResumen(importacion, filtros = {}, usuarioId = null) {
   let infoFacturacionClasificacion = null;
 
   if (tipoHoja === 'facturacion') {
-    const resultado = await aplicarClasificacionFacturacion(filasBase, mapeo);
-    filasBase = resultado.filas;
-    infoFacturacionClasificacion = {
-      resumen: resultado.resumenClasificacion,
-      mapaCargado: resultado.mapaCargado,
-    };
+    const totalFacturas = await Factura.countDocuments();
+    if (totalFacturas > 0) {
+      const mapaUnidades = await obtenerMapaUnidades();
+      const facturas = await Factura.find().sort({ fechaFacturacion: -1 }).lean();
+      filasBase = facturasComoFilasExcel(facturas, mapeo, mapaUnidades);
+      infoFacturacionClasificacion = resumenClasificacionDesdeFilas(filasBase, mapaUnidades);
+    } else {
+      const resultado = await aplicarClasificacionFacturacion(filasBase, mapeo);
+      filasBase = resultado.filas;
+      infoFacturacionClasificacion = {
+        resumen: resultado.resumenClasificacion,
+        mapaCargado: resultado.mapaCargado,
+      };
+    }
   }
 
   if (
