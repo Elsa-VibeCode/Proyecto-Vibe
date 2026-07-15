@@ -10,6 +10,7 @@ import {
 } from '../utils/clasificacionMotor.js';
 import { asegurarMapaUnidadesDisponible } from './mapaSync.js';
 import { detectarColumnas, parsearNumero } from '../utils/excelFiltros.js';
+import { FacturaHistorial } from '../models/FacturaHistorial.js';
 
 const redondear = (v) => Math.round((Number(v) || 0) * 100) / 100;
 
@@ -23,7 +24,7 @@ export function normalizarRfcEmisor(valor) {
 }
 
 // Strategy (legacy) → Consulting al persistir. Valores fuera del enum → null.
-function unidadValidaParaFactura(unidad) {
+export function unidadValidaParaFactura(unidad) {
   if (!unidad) return null;
   const u = normalizarUnidad(unidad);
   if (u === 'Consulting' || u === 'Technologies' || u === 'Grupo') return u;
@@ -46,6 +47,13 @@ export function calcularIva(subtotal, cliente) {
 
 const escaparRegex = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+export const FILTRO_ACTIVAS = { deletedAt: null };
+
+const CAMPOS_AUDITORIA = [
+  'fechaFacturacion', 'fechaPago', 'noFactura', 'cliente', 'concepto', 'unidad',
+  'subtotal', 'iva', 'total', 'estatusEnvio', 'estatusPago', 'complementoPago', 'rfcEmisor',
+];
+
 // ---- Clasificación por cliente contra el Mapa de Unidades ----
 export async function construirIndiceMapa() {
   await asegurarMapaUnidadesDisponible();
@@ -66,7 +74,7 @@ export async function clasificarFactura(id, unidad) {
   if (!UNIDADES_CLASIFICABLES.has(unidad)) {
     throw new Error('Unidad inválida. Use Consulting, Technologies o Grupo.');
   }
-  const factura = await Factura.findById(id);
+  const factura = await Factura.findOne({ _id: id, ...FILTRO_ACTIVAS });
   if (!factura) return null;
   factura.unidad = unidad;
   factura.unidadManual = true;
@@ -78,7 +86,7 @@ export async function clasificarFactura(id, unidad) {
 /** Re-aplica el mapa de clientes a facturas no marcadas como manuales. */
 export async function reclasificarFacturasDesdeMapa() {
   const indice = await construirIndiceMapa();
-  const facturas = await Factura.find({ unidadManual: { $ne: true } }).select('_id cliente').lean();
+  const facturas = await Factura.find({ ...FILTRO_ACTIVAS, unidadManual: { $ne: true } }).select('_id cliente').lean();
   let actualizadas = 0;
   for (const f of facturas) {
     const { unidad, clasificacionAuto } = clasificarPorCliente(f.cliente, indice);
@@ -134,7 +142,7 @@ export function construirFiltroFacturas(query = {}) {
     q,
   } = query;
 
-  const filtro = {};
+  const filtro = { ...FILTRO_ACTIVAS };
 
   const mesF = mesFacturacion || mes;
   if (mesF) filtro.mes = mesF;
@@ -228,13 +236,13 @@ export async function totalesFacturas(filtros = {}) {
 }
 
 export async function mesesFacturacionDisponibles() {
-  const meses = await Factura.distinct('mes');
+  const meses = await Factura.distinct('mes', FILTRO_ACTIVAS);
   return meses.filter((m) => m && m >= '2000-01').sort((a, b) => b.localeCompare(a));
 }
 
 export async function mesesPagoDisponibles() {
   const resultado = await Factura.aggregate([
-    { $match: { fechaPago: { $ne: null, $gte: new Date('2000-01-01T00:00:00.000Z') } } },
+    { $match: { ...FILTRO_ACTIVAS, fechaPago: { $ne: null, $gte: new Date('2000-01-01T00:00:00.000Z') } } },
     { $project: { mes: { $dateToString: { format: '%Y-%m', date: '$fechaPago' } } } },
     { $group: { _id: '$mes' } },
     { $match: { _id: { $gte: '2000-01' } } },
@@ -245,11 +253,195 @@ export async function mesesPagoDisponibles() {
 
 export async function clientesDistintos() {
   const [deFacturas, delMapa] = await Promise.all([
-    Factura.distinct('cliente'),
+    Factura.distinct('cliente', FILTRO_ACTIVAS),
     MapaUnidad.distinct('clienteRazonSocial'),
   ]);
   const set = new Set([...deFacturas, ...delMapa].filter(Boolean));
   return [...set].sort((a, b) => a.localeCompare(b, 'es'));
+}
+
+export async function folioDisponible(noFactura, excludeId = null) {
+  const folio = String(noFactura ?? '').trim();
+  if (!folio) return false;
+  const filtro = { noFactura: folio, ...FILTRO_ACTIVAS };
+  if (excludeId) filtro._id = { $ne: excludeId };
+  const existe = await Factura.findOne(filtro).select('_id').lean();
+  return !existe;
+}
+
+export async function historialCliente(cliente) {
+  const nombre = String(cliente ?? '').trim();
+  if (!nombre) return null;
+
+  const rx = new RegExp(`^${escaparRegex(nombre)}$`, 'i');
+  const facturas = await Factura.find({
+    ...FILTRO_ACTIVAS,
+    cliente: rx,
+    unidad: { $ne: null },
+  })
+    .select('unidad fechaFacturacion')
+    .lean();
+
+  const conteo = {};
+  const ultimaPorUnidad = {};
+
+  for (const f of facturas) {
+    const u = unidadEfectiva(f.unidad);
+    if (!UNIDADES_CLASIFICABLES.has(u)) continue;
+    conteo[u] = (conteo[u] || 0) + 1;
+    const fecha = f.fechaFacturacion ? new Date(f.fechaFacturacion) : null;
+    if (fecha && (!ultimaPorUnidad[u] || fecha > ultimaPorUnidad[u])) {
+      ultimaPorUnidad[u] = fecha;
+    }
+  }
+
+  const unidadesUsadas = Object.entries(conteo)
+    .map(([unidad, count]) => ({
+      unidad,
+      count,
+      ultimaFecha: ultimaPorUnidad[unidad]?.toISOString().slice(0, 10) ?? null,
+    }))
+    .sort((a, b) => b.count - a.count || (b.ultimaFecha ?? '').localeCompare(a.ultimaFecha ?? ''));
+
+  const masReciente = await Factura.findOne({
+    ...FILTRO_ACTIVAS,
+    cliente: rx,
+    unidad: { $ne: null },
+  })
+    .sort({ fechaFacturacion: -1 })
+    .select('unidad')
+    .lean();
+
+  const unidadSugerida = masReciente ? unidadEfectiva(masReciente.unidad) : null;
+  if (unidadSugerida && !UNIDADES_CLASIFICABLES.has(unidadSugerida)) {
+    return {
+      cliente: nombre,
+      totalFacturas: facturas.length,
+      unidadesUsadas,
+      unidadSugerida: null,
+    };
+  }
+
+  return {
+    cliente: nombre,
+    totalFacturas: facturas.length,
+    unidadesUsadas,
+    unidadSugerida,
+  };
+}
+
+export async function conceptosDeCliente(cliente) {
+  const nombre = String(cliente ?? '').trim();
+  if (!nombre) return [];
+  const rx = new RegExp(`^${escaparRegex(nombre)}$`, 'i');
+  const conceptos = await Factura.distinct('concepto', {
+    ...FILTRO_ACTIVAS,
+    cliente: rx,
+    concepto: { $ne: '' },
+  });
+  return conceptos.filter(Boolean).sort((a, b) => a.localeCompare(b, 'es'));
+}
+
+export async function softDeleteFactura(id) {
+  const factura = await Factura.findOne({ _id: id, ...FILTRO_ACTIVAS });
+  if (!factura) return null;
+  factura.deletedAt = new Date();
+  await factura.save();
+  return factura;
+}
+
+function serializarValor(campo, valor) {
+  if (valor instanceof Date) return valor.toISOString();
+  return valor;
+}
+
+export async function registrarHistorialFactura(facturaId, accion, cambios, usuarioId) {
+  if (!cambios?.length) return;
+  await FacturaHistorial.create({
+    facturaId,
+    usuarioId: usuarioId ?? null,
+    accion,
+    cambios,
+  });
+}
+
+export function diffFactura(antes, despues) {
+  const cambios = [];
+  for (const campo of CAMPOS_AUDITORIA) {
+    const a = serializarValor(campo, antes[campo]);
+    const d = serializarValor(campo, despues[campo]);
+    if (JSON.stringify(a) !== JSON.stringify(d)) {
+      cambios.push({ campo, anterior: a ?? null, nuevo: d ?? null });
+    }
+  }
+  return cambios;
+}
+
+export async function prepararDatosFactura(body) {
+  const datos = { ...body };
+  const subtotal = Number(datos.subtotal) || 0;
+  const cliente = String(datos.cliente ?? '').trim();
+
+  if (datos.unidad !== undefined && datos.unidad !== '' && datos.unidad !== null) {
+    datos.unidad = unidadValidaParaFactura(datos.unidad);
+  }
+
+  const iva =
+    datos.iva !== undefined && datos.iva !== ''
+      ? Number(datos.iva)
+      : calcularIva(subtotal, cliente);
+  datos.iva = redondear(iva);
+  datos.subtotal = redondear(subtotal);
+  datos.total =
+    datos.total !== undefined && datos.total !== ''
+      ? redondear(datos.total)
+      : redondear(subtotal + datos.iva);
+
+  if (datos.fechaPago) {
+    datos.fechaPago = new Date(datos.fechaPago);
+    if (Number.isNaN(datos.fechaPago.getTime())) datos.fechaPago = null;
+  } else {
+    datos.fechaPago = null;
+  }
+
+  if (datos.fechaFacturacion) {
+    datos.fechaFacturacion = new Date(datos.fechaFacturacion);
+  }
+
+  if (!datos.estatusEnvio) datos.estatusEnvio = 'ENVIADA';
+  if (!datos.estatusPago) datos.estatusPago = datos.fechaPago ? 'PAGADO' : 'PENDIENTE';
+  if (datos.fechaPago && datos.estatusPago === 'PENDIENTE') datos.estatusPago = 'PAGADO';
+
+  datos.rfcEmisor = normalizarRfcEmisor(datos.rfcEmisor);
+  datos.concepto = String(datos.concepto ?? '').trim();
+  datos.cliente = cliente;
+  datos.noFactura = String(datos.noFactura ?? '').trim();
+
+  if (datos.unidad === undefined || datos.unidad === '' || datos.unidad === null) {
+    datos.unidad = null;
+    datos.clasificacionAuto = false;
+    datos.unidadManual = false;
+  } else {
+    datos.clasificacionAuto = false;
+    datos.unidadManual = true;
+  }
+
+  return datos;
+}
+
+export function validarReglasFactura(datos) {
+  if (!esFechaFacturaValida(datos.fechaFacturacion)) {
+    throw new Error('La fecha de facturación no es válida');
+  }
+  if (Number(datos.total) < 0) {
+    throw new Error('El total no puede ser negativo');
+  }
+  if (datos.estatusPago === 'PAGADO' && !datos.fechaPago) {
+    throw new Error('Si el estatus de pago es PAGADO, la fecha de pago es obligatoria');
+  }
+  if (!datos.unidad) {
+    throw new Error('La unidad de negocio es obligatoria');
+  }
 }
 
 // Genera un folio sintético estable para filas sin noFactura (idempotente).
@@ -293,7 +485,7 @@ export async function migrarFacturasDesdeExcel({ dryRun = false } = {}) {
 
   // Limpia registros con fecha placeholder (epoch 1970) de migraciones anteriores.
   if (!dryRun) {
-    await Factura.deleteMany({ fechaFacturacion: { $lt: new Date('2000-01-01T00:00:00.000Z') } });
+    await Factura.deleteMany({ fechaFacturacion: { $lt: new Date('2000-01-01T00:00:00.000Z') }, ...FILTRO_ACTIVAS });
   }
 
   const mapeo = detectarColumnas(importacion.columnas ?? []);
@@ -420,7 +612,7 @@ export async function migrarFacturasDesdeExcel({ dryRun = false } = {}) {
     };
 
     if (!dryRun) {
-      const existente = await Factura.findOne({ noFactura }).select('unidadManual').lean();
+      const existente = await Factura.findOne({ noFactura, ...FILTRO_ACTIVAS }).select('unidadManual').lean();
       if (existente?.unidadManual) {
         const { unidad: _u, clasificacionAuto: _c, ...docSinClasif } = doc;
         await Factura.findOneAndUpdate({ noFactura }, docSinClasif, {

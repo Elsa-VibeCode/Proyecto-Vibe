@@ -23,6 +23,59 @@ export interface ResumenClasificacionFacturacion {
 
 export type UnidadFactura = 'Consulting' | 'Technologies' | 'Grupo';
 
+export type EstatusEnvioFactura = 'ENVIADA' | 'POR_ENVIAR' | 'CANCELADA';
+export type EstatusPagoFactura = 'PAGADO' | 'PENDIENTE' | 'PARCIAL' | 'VENCIDO' | 'CANCELADO';
+export type RfcEmisorFactura = 'GBL' | 'GAVM' | 'OTRO';
+
+export interface FacturaPayload {
+  fechaFacturacion: string;
+  noFactura: string;
+  cliente: string;
+  concepto: string;
+  unidad: UnidadFactura;
+  subtotal: number;
+  iva: number;
+  total: number;
+  fechaPago?: string;
+  estatusEnvio: EstatusEnvioFactura;
+  estatusPago: EstatusPagoFactura;
+  rfcEmisor: RfcEmisorFactura;
+  complementoPago?: string;
+}
+
+export interface FacturaDocument extends FacturaPayload {
+  _id: string;
+  unidadManual?: boolean;
+  clasificacionAuto?: boolean;
+  origen?: string;
+  mes?: string;
+  deletedAt?: string | null;
+}
+
+export interface UnidadHistorialCliente {
+  unidad: string;
+  count: number;
+  ultimaFecha: string | null;
+}
+
+export interface ClienteHistorialFactura {
+  cliente: string;
+  totalFacturas: number;
+  unidadesUsadas: UnidadHistorialCliente[];
+  unidadSugerida: string | null;
+}
+
+export function calcularIvaFactura(subtotal: number, cliente: string): number {
+  if (/novamex/i.test(cliente)) return 0;
+  return Math.round(subtotal * 0.16 * 100) / 100;
+}
+
+export function calcularTotalFactura(subtotal: number, iva: number): number {
+  return Math.round((subtotal + iva) * 100) / 100;
+}
+
+const BORRADOR_KEY = 'adminsys-factura-borrador';
+
 export interface ClasificacionFacturacionInfo {
   resumen: ResumenClasificacionFacturacion;
   mapaCargado: boolean;
@@ -317,6 +370,34 @@ export function guardarFiltrosFacturacion(filtros: FiltrosFacturacion) {
   if (typeof localStorage === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEY_FACTURACION, JSON.stringify(filtros));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function guardarBorradorFactura(datos: Partial<FacturaPayload>) {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(BORRADOR_KEY, JSON.stringify(datos));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function cargarBorradorFactura(): Partial<FacturaPayload> | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(BORRADOR_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function limpiarBorradorFactura() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.removeItem(BORRADOR_KEY);
   } catch {
     /* ignore */
   }

@@ -31,8 +31,8 @@ const facturaSchema = new mongoose.Schema(
   {
     fechaFacturacion: { type: Date, required: true, index: true },
     fechaPago: { type: Date, default: null },
-    // noFactura es único; las filas migradas sin folio reciben uno sintético "S/F-...".
-    noFactura: { type: String, required: true, trim: true, unique: true },
+    // noFactura único entre facturas activas (índice parcial con deletedAt).
+    noFactura: { type: String, required: true, trim: true },
     cliente: { type: String, required: true, trim: true, index: true },
     concepto: { type: String, trim: true, default: '' },
     unidad: { type: String, enum: [...UNIDADES_FACTURA, null], default: null },
@@ -48,8 +48,14 @@ const facturaSchema = new mongoose.Schema(
     clasificacionAuto: { type: Boolean, default: false }, // true = vino del mapa
     // Marca las facturas creadas por la migración desde Excel (respaldo/trazabilidad).
     origen: { type: String, enum: ['excel-migracion', 'manual', 'sicofi'], default: 'manual' },
+    deletedAt: { type: Date, default: null, index: true },
   },
   { timestamps: true }
+);
+
+facturaSchema.index(
+  { noFactura: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } }
 );
 
 facturaSchema.pre('validate', function calcularMes() {

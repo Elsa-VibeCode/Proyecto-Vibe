@@ -6,7 +6,7 @@ import { Factura } from '../models/Factura.js';
 import { protegerRuta, requiereRol } from '../middleware/auth.js';
 import { sembrarMapasSiVacios, asegurarMapaUnidadesDisponible } from '../services/mapaSync.js';
 import { detectarColumnas } from '../utils/excelFiltros.js';
-import { reclasificarFacturasDesdeMapa } from '../services/facturaService.js';
+import { reclasificarFacturasDesdeMapa, FILTRO_ACTIVAS } from '../services/facturaService.js';
 import {
   enriquecerFilasFacturacion,
   resumenClasificacionFacturacion,
@@ -133,7 +133,7 @@ router.delete('/proveedores/:id', requiereRol(...ROLES_EDICION), async (req, res
 });
 
 router.post('/reclasificar-facturacion', requiereRol(...ROLES_EDICION), async (req, res) => {
-  const totalFacturas = await Factura.countDocuments();
+  const totalFacturas = await Factura.countDocuments(FILTRO_ACTIVAS);
   if (totalFacturas > 0) {
     const resultado = await reclasificarFacturasDesdeMapa();
     return res.json({
