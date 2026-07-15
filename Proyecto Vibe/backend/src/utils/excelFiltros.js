@@ -18,9 +18,9 @@ const ORDEN_CAMPOS = [
   'nivelPuesto',
   'seguroMedico',
   'fechaFacturacion',
+  'fechaPago',
   'fechaMovimiento',
   'noFactura',
-  'fechaPago',
   'conceptoMovimiento',
   'conceptoFactura',
   'contraparte',
@@ -416,6 +416,27 @@ function esPagado(estatus) {
   return normalizar(String(estatus ?? '')).includes('pagad');
 }
 
+function mesDeValor(valor) {
+  if (valor === null || valor === undefined || valor === '') return '';
+  if (valor instanceof Date) {
+    return Number.isNaN(valor.getTime()) ? '' : valor.toISOString().slice(0, 7);
+  }
+  const texto = String(valor).trim();
+  const mesesAbrev = {
+    ene: '01', feb: '02', mar: '03', abr: '04', may: '05', jun: '06',
+    jul: '07', ago: '08', sep: '09', oct: '10', nov: '11', dic: '12',
+  };
+  const match = texto.match(/^(\d{1,2})-([A-Za-zÁ-ú]{3})-(\d{2,4})$/);
+  if (match) {
+    const mes = mesesAbrev[match[2].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').slice(0, 3)];
+    let anio = Number(match[3]);
+    if (anio < 100) anio += 2000;
+    if (mes) return `${anio}-${mes}`;
+  }
+  const d = new Date(valor);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 7);
+}
+
 export function filtrarFilas(filas, mapeo, filtros = {}) {
   const sueldoMin = filtros.sueldoMin ? Number(filtros.sueldoMin) : null;
   const sueldoMax = filtros.sueldoMax ? Number(filtros.sueldoMax) : null;
@@ -458,6 +479,14 @@ export function filtrarFilas(filas, mapeo, filtros = {}) {
     if (filtros.soloSinClasificar === 'true' && fila.estadoClasificacion !== 'no_encontrado') {
       return false;
     }
+    if (filtros.mesFacturacion) {
+      const mesFact = mesDeValor(obtenerValor(fila, mapeo.fechaFacturacion));
+      if (mesFact !== filtros.mesFacturacion) return false;
+    }
+    if (filtros.mesPago) {
+      const mesPag = mesDeValor(obtenerValor(fila, mapeo.fechaPago));
+      if (mesPag !== filtros.mesPago) return false;
+    }
     if (filtros.puesto && puesto !== filtros.puesto) return false;
     if (filtros.nivelPuesto && nivel !== filtros.nivelPuesto) return false;
     if (filtros.categoria && categoria !== filtros.categoria) return false;
@@ -484,6 +513,8 @@ export function calcularResumenFacturacion(filas, mapeo) {
   const porCliente = new Map();
   const porUnidad = new Map();
   const porEstatus = new Map();
+  let cantidadPagadas = 0;
+  let cantidadPendientes = 0;
 
   for (const fila of filas) {
     if (fila.excluidoDeTotales) continue;
@@ -496,8 +527,13 @@ export function calcularResumenFacturacion(filas, mapeo) {
     const pagado = mapeo.estatusPago ? esPagado(estatus) : false;
 
     totalFacturado += monto;
-    if (pagado) totalPagado += monto;
-    else totalPendiente += monto;
+    if (pagado) {
+      totalPagado += monto;
+      cantidadPagadas += 1;
+    } else {
+      totalPendiente += monto;
+      cantidadPendientes += 1;
+    }
 
     if (!porCliente.has(cliente)) porCliente.set(cliente, { facturas: 0, monto: 0 });
     const grupoCliente = porCliente.get(cliente);
@@ -527,6 +563,8 @@ export function calcularResumenFacturacion(filas, mapeo) {
     totalPagado: Math.round(totalPagado),
     totalPendiente: Math.round(totalPendiente),
     facturas: filas.filter((fila) => !fila.excluidoDeTotales).length,
+    cantidadPagadas,
+    cantidadPendientes,
     porCliente: ordenar([...porCliente.entries()]).slice(0, 10),
     porUnidad: porUnidadOrdenado,
     porArea: porUnidadOrdenado,

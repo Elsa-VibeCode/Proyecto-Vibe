@@ -4,7 +4,11 @@
   import { api } from '$lib/api';
   import { formatearMoneda } from '$lib/excelFiltros';
   import type { FiltrosFacturacion, ResumenModulo } from '$lib/types/admin';
-  import { filtrosFacturacionVacios } from '$lib/types/admin';
+  import {
+    filtrosFacturacionVacios,
+    cargarFiltrosFacturacionGuardados,
+    guardarFiltrosFacturacion,
+  } from '$lib/types/admin';
 
   let resumen = $state<ResumenModulo | null>(null);
   let error = $state('');
@@ -12,13 +16,34 @@
   let reclasificando = $state(false);
   let mensaje = $state('');
   let filtros = $state<FiltrosFacturacion>(filtrosFacturacionVacios());
-  let opcionesFiltro = $state({ clientes: [] as string[], areas: [] as string[], estatus: [] as string[] });
+  let opcionesFiltro = $state({
+    clientes: [] as string[],
+    areas: [] as string[],
+    estatus: [] as string[],
+    mesesFacturacion: [] as string[],
+    mesesPago: [] as string[],
+  });
 
   let puedeEditar = $derived($auth.usuario?.rol === 'admin' || $auth.usuario?.rol === 'editor');
 
   let clientes = $derived(opcionesFiltro.clientes);
   let areas = $derived(opcionesFiltro.areas);
   let estatusOpciones = $derived(opcionesFiltro.estatus);
+  let mesesFacturacion = $derived(opcionesFiltro.mesesFacturacion);
+  let mesesPago = $derived(opcionesFiltro.mesesPago);
+
+  async function cargarMesesDisponibles() {
+    try {
+      const [fact, pago] = await Promise.all([
+        api<{ ok: boolean; data: { meses: string[] } }>('/facturas/meses-facturacion'),
+        api<{ ok: boolean; data: { meses: string[] } }>('/facturas/meses-pago'),
+      ]);
+      opcionesFiltro.mesesFacturacion = fact.data?.meses ?? [];
+      opcionesFiltro.mesesPago = pago.data?.meses ?? [];
+    } catch {
+      /* dropdowns vacíos si aún no hay colección Factura */
+    }
+  }
 
   let columnasTabla = $derived(() => {
     if (!resumen?.mapeo) return [];
@@ -57,6 +82,8 @@
     if (filtros.cliente) params.set('cliente', filtros.cliente);
     if (filtros.areaVenta) params.set('areaVenta', filtros.areaVenta);
     if (filtros.estatusPago) params.set('estatusPago', filtros.estatusPago);
+    if (filtros.mesFacturacion) params.set('mesFacturacion', filtros.mesFacturacion);
+    if (filtros.mesPago) params.set('mesPago', filtros.mesPago);
     if (filtros.totalMin) params.set('totalMin', filtros.totalMin);
     if (filtros.totalMax) params.set('totalMax', filtros.totalMax);
     if (filtros.soloSinClasificar) params.set('soloSinClasificar', filtros.soloSinClasificar);
@@ -79,15 +106,19 @@
   }
 
   onMount(() => {
+    filtros = cargarFiltrosFacturacionGuardados();
+    cargarMesesDisponibles();
     cargarDatos(true);
   });
 
   function aplicarFiltros() {
+    guardarFiltrosFacturacion(filtros);
     cargarDatos(false);
   }
 
   function limpiarFiltros() {
     filtros = filtrosFacturacionVacios();
+    guardarFiltrosFacturacion(filtros);
     cargarDatos(false);
   }
 
@@ -157,6 +188,9 @@
       <p>
         <strong>{resumen.importacion.nombreArchivo}</strong> · {resumen.importacion.nombreHoja} ·
         {resumen.totalFilas} facturas mostradas
+        {#if resumen.facturacion?.cantidadPagadas !== undefined}
+          · {resumen.facturacion.cantidadPagadas} pagadas · {resumen.facturacion.cantidadPendientes} pendientes
+        {/if}
       </p>
       {#if resumen.clasificacionFacturacion}
         {@const c = resumen.clasificacionFacturacion.resumen}
@@ -232,13 +266,30 @@
               {reclasificando ? 'Reclasificando...' : 'Reclasificar pendientes'}
             </button>
           {/if}
-          <button type="button" class="link" onclick={limpiarFiltros}>Limpiar</button>
         </div>
       </div>
       {#if mensaje}
         <p class="mensaje-ok">{mensaje}</p>
       {/if}
       <div class="filtros-grid">
+        <div class="form-group">
+          <label class="label" for="f-mes-fact">Mes facturación</label>
+          <select id="f-mes-fact" class="select" bind:value={filtros.mesFacturacion}>
+            <option value="">Todos</option>
+            {#each mesesFacturacion as mes}
+              <option value={mes}>{mes}</option>
+            {/each}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="label" for="f-mes-pago">Mes pago</label>
+          <select id="f-mes-pago" class="select" bind:value={filtros.mesPago}>
+            <option value="">Todos</option>
+            {#each mesesPago as mes}
+              <option value={mes}>{mes}</option>
+            {/each}
+          </select>
+        </div>
         <div class="form-group">
           <label class="label" for="f-cliente">Cliente</label>
           <select id="f-cliente" class="select" bind:value={filtros.cliente}>
@@ -296,7 +347,10 @@
           </label>
         </div>
       </div>
-      <button class="btn btn-primary btn-sm" onclick={aplicarFiltros}>Aplicar filtros</button>
+      <div class="filtros-footer">
+        <button class="btn btn-primary btn-sm" onclick={aplicarFiltros}>Aplicar filtros</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick={limpiarFiltros}>Limpiar filtros</button>
+      </div>
     </section>
 
     <div class="resumenes-grid">
@@ -420,6 +474,7 @@
   .filtros-panel { padding: 1rem; }
   .filtros-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
   .filtros-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem; }
+  .filtros-footer { display: flex; gap: 0.5rem; flex-wrap: wrap; }
   .resumenes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
   .resumenes-grid .card, .tabla-detalle { padding: 1rem; }
   h3 { font-size: 0.95rem; margin-bottom: 0.75rem; }

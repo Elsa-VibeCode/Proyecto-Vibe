@@ -50,4 +50,6 @@ facturaSchema.pre('validate', function calcularMes() {
   }
 });
 
+facturaSchema.index({ fechaPago: 1, estatusPago: 1 });
+
 export const Factura = mongoose.model('Factura', facturaSchema);
