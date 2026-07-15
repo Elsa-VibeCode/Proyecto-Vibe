@@ -122,6 +122,25 @@
     return `${meses[idx]} ${y}`;
   }
 
+  function filtrosEstanActivos(): boolean {
+    const vacios = filtrosFacturacionVacios();
+    return (Object.keys(vacios) as (keyof FiltrosFacturacion)[]).some((k) => filtros[k] !== vacios[k]);
+  }
+
+  /** Tras crear/editar, alinea filtros para que la factura recién guardada sea visible. */
+  function ajustarFiltrosParaFactura(factura: FacturaDocument) {
+    const mesFact = factura.mes || mesDeValor(factura.fechaFacturacion);
+    const mesPag = mesDeValor(factura.fechaPago);
+    filtros = {
+      ...filtros,
+      mesFacturacion: mesFact || '',
+      mesPago: mesPag || '',
+      estadoClasificacion: '',
+      soloSinClasificar: '',
+    };
+    guardarFiltrosFacturacion(filtros);
+  }
+
   function actualizarOpcionesFiltro(data: ResumenModulo, mesesApi?: { mesesFacturacion: string[]; mesesPago: string[] }) {
     const deFilas = extraerOpciones(data);
     opcionesFiltro = {
@@ -347,22 +366,30 @@
         );
         cerrarModalFactura();
         mensaje = 'Factura actualizada';
-        if (res.data?.factura) mostrarToastGuardado(res.data.factura);
+        if (res.data?.factura) {
+          ajustarFiltrosParaFactura(res.data.factura);
+          mostrarToastGuardado(res.data.factura);
+        }
       } else {
         const res = await api<{ ok: boolean; data: { factura: FacturaDocument } }>('/facturas', {
           method: 'POST',
           body: JSON.stringify(datos),
         });
         limpiarBorradorFactura();
+        if (res.data?.factura) {
+          ajustarFiltrosParaFactura(res.data.factura);
+        }
         if (crearOtra) {
           facturaFormRef?.limpiarParaNueva(datos.fechaFacturacion);
-          mensaje = `Factura ${datos.noFactura} guardada. Captura la siguiente.`;
+          mensaje = `Factura ${datos.noFactura} guardada. Filtros ajustados al mes de la factura.`;
         } else {
           cerrarModalFactura();
+          mensaje = 'Factura guardada. Filtros ajustados para mostrarla en la tabla.';
         }
         if (res.data?.factura) mostrarToastGuardado(res.data.factura);
       }
-      await cargarDatos(false);
+      const mesesApi = await cargarMesesDisponibles();
+      await cargarDatos(true, mesesApi);
     } catch (err) {
       error = err instanceof Error ? err.message : 'No se pudo guardar la factura';
       throw err;
@@ -529,6 +556,12 @@
       {#if mensaje}
         <p class="mensaje-ok">{mensaje}</p>
       {/if}
+      {#if filtrosEstanActivos()}
+        <p class="aviso-filtros">
+          Hay filtros activos. Si no ves una factura recién guardada, revisa mes de facturación y clasificación.
+          <button type="button" class="link" onclick={limpiarFiltros}>Limpiar filtros</button>
+        </p>
+      {/if}
       <div class="filtros-grid">
         <div class="form-group">
           <label class="label" for="f-mes-fact">Mes facturación</label>
@@ -686,6 +719,16 @@
             </tr>
           </thead>
           <tbody>
+            {#if (resumen.filas ?? []).length === 0}
+              <tr>
+                <td colspan={2 + columnasTabla().length + (puedeEditar ? 1 : 0)} class="tabla-vacia">
+                  Sin facturas con los filtros actuales.
+                  {#if filtrosEstanActivos()}
+                    <button type="button" class="link" onclick={limpiarFiltros}>Limpiar filtros</button>
+                  {/if}
+                </td>
+              </tr>
+            {:else}
             {#each resumen.filas ?? [] as fila}
               <tr class:sin-clasificar={fila.estadoClasificacion === 'no_encontrado'}>
                 <td>
@@ -749,6 +792,7 @@
                 {/if}
               </tr>
             {/each}
+            {/if}
           </tbody>
         </table>
       </div>
@@ -809,6 +853,15 @@
   .clasificacion-meta .alerta { color: var(--color-danger); }
   .aviso-mapa { margin-top: 0.35rem; color: var(--color-warning); font-size: 0.82rem; }
   .mensaje-ok { color: var(--color-success); font-size: 0.85rem; margin-bottom: 0.5rem; }
+  .aviso-filtros {
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.82rem;
+    color: #854d0e;
+    background: #fef9c3;
+    border-radius: 6px;
+  }
+  .aviso-filtros .link { margin-left: 0.35rem; }
   .filtros-acciones { display: flex; gap: 0.75rem; align-items: center; }
   .checkbox-group { display: flex; align-items: end; }
   .checkbox-label { display: flex; gap: 0.5rem; align-items: center; font-size: 0.875rem; }
