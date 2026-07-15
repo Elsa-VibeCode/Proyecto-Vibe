@@ -7,6 +7,7 @@
   const enlaces = [
     { href: '/dashboard', label: 'Panel', icon: '📊' },
     { href: '/facturacion', label: 'Facturación', icon: '🧾' },
+    { href: '/egresos', label: 'Egresos', icon: '💸' },
     { href: '/clasificacion', label: 'Clasificación', icon: '🏷️' },
     { href: '/finanzas', label: 'Finanzas', icon: '💰' },
     { href: '/nomina', label: 'Nómina', icon: '👥' },
@@ -16,6 +17,7 @@
     { href: '/usuarios', label: 'Usuarios', icon: '👥' },
     { href: '/datos-excel', label: 'Datos Excel', icon: '📑' },
     { href: '/mapa', label: 'Mapa', icon: '🗺️' },
+    { href: '/config/tipos-gasto', label: 'Tipos de gasto', icon: '⚙️' },
   ];
 </script>
 

@@ -11,6 +11,9 @@ import mapasRoutes from './routes/mapas.js';
 import colaboradoresRoutes from './routes/colaboradores.js';
 import nominaRoutes from './routes/nomina.js';
 import flujoRoutes from './routes/flujo.js';
+import egresosRoutes from './routes/egresos.js';
+import tiposGastoRoutes from './routes/tiposGasto.js';
+import configRoutes from './routes/config.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -64,6 +67,9 @@ app.use('/api/mapas', mapasRoutes);
 app.use('/api/colaboradores', colaboradoresRoutes);
 app.use('/api/nomina', nominaRoutes);
 app.use('/api/flujo', flujoRoutes);
+app.use('/api/egresos', egresosRoutes);
+app.use('/api/tipos-gasto', tiposGastoRoutes);
+app.use('/api/config', configRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ mensaje: 'Ruta no encontrada' });
