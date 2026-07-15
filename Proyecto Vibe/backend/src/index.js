@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { connectDB } from './config/db.js';
+import { obtenerConfig } from './models/Config.js';
+import { asegurarTiposGasto } from './models/TipoGasto.js';
 import webhookRoutes from './routes/webhooks.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
@@ -83,6 +85,17 @@ app.use((err, _req, res, _next) => {
 async function iniciar() {
   try {
     await connectDB();
+
+    // Semillas idempotentes (catálogo de tipos de gasto + config global).
+    // Permite desplegar sin acceso a Shell/One-off jobs (plan gratuito de Render).
+    try {
+      await obtenerConfig();
+      const creados = await asegurarTiposGasto();
+      if (creados) console.log(`✓ Catálogo de tipos de gasto inicializado (${creados}).`);
+    } catch (seedError) {
+      console.error('Semilla inicial (no crítica) falló:', seedError.message);
+    }
+
     app.listen(PORT, () => {
       console.log(`✓ Servidor corriendo en http://localhost:${PORT}`);
     });

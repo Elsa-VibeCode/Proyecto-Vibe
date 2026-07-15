@@ -43,3 +43,18 @@ const tipoGastoSchema = new mongoose.Schema(
 );
 
 export const TipoGasto = mongoose.model('TipoGasto', tipoGastoSchema);
+
+// Inserta el catálogo inicial si la colección está vacía. Idempotente:
+// si ya hay tipos (p. ej. agregados desde la UI), no hace nada.
+export async function asegurarTiposGasto() {
+  const total = await TipoGasto.estimatedDocumentCount();
+  if (total > 0) return 0;
+
+  const docs = TIPOS_GASTO_INICIALES.map((nombre, i) => ({
+    nombre: nombre.toUpperCase(),
+    activo: true,
+    orden: i,
+  }));
+  await TipoGasto.insertMany(docs, { ordered: false }).catch(() => {});
+  return docs.length;
+}
