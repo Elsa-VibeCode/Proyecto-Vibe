@@ -3,6 +3,7 @@
   import { auth } from '$lib/auth';
   import { api } from '$lib/api';
   import { formatearMoneda } from '$lib/excelFiltros';
+  import { formatearFecha } from '$lib/utils';
   import type { FiltrosFacturacion, ResumenModulo } from '$lib/types/admin';
   import {
     filtrosFacturacionVacios,
@@ -32,17 +33,62 @@
   let mesesFacturacion = $derived(opcionesFiltro.mesesFacturacion);
   let mesesPago = $derived(opcionesFiltro.mesesPago);
 
+  function mesDeValor(valor: unknown): string {
+    if (valor === null || valor === undefined || valor === '') return '';
+    const d = valor instanceof Date ? valor : new Date(String(valor));
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toISOString().slice(0, 7);
+  }
+
+  function extraerOpciones(data: ResumenModulo) {
+    const m = data.mapeo;
+    const filas = data.filas ?? [];
+    const mesesFact = new Set<string>();
+    const mesesPag = new Set<string>();
+
+    for (const f of filas) {
+      if (m.fechaFacturacion) {
+        const mes = mesDeValor(f[m.fechaFacturacion]);
+        if (mes) mesesFact.add(mes);
+      }
+      if (m.fechaPago) {
+        const mes = mesDeValor(f[m.fechaPago]);
+        if (mes) mesesPag.add(mes);
+      }
+    }
+
+    return {
+      clientes: m.cliente
+        ? [...new Set(filas.map((f) => String(f[m.cliente!] ?? '').trim()).filter(Boolean))].sort()
+        : [],
+      areas: m.areaVenta
+        ? [...new Set(filas.map((f) => String(f[m.areaVenta!] ?? '').trim()).filter(Boolean))].sort()
+        : [],
+      estatus: m.estatusPago
+        ? [...new Set(filas.map((f) => String(f[m.estatusPago!] ?? '').trim()).filter(Boolean))].sort()
+        : [],
+      mesesFacturacion: [...mesesFact].sort((a, b) => b.localeCompare(a)),
+      mesesPago: [...mesesPag].sort((a, b) => b.localeCompare(a)),
+    };
+  }
+
   async function cargarMesesDisponibles() {
     try {
       const [fact, pago] = await Promise.all([
         api<{ ok: boolean; data: { meses: string[] } }>('/facturas/meses-facturacion'),
         api<{ ok: boolean; data: { meses: string[] } }>('/facturas/meses-pago'),
       ]);
-      opcionesFiltro.mesesFacturacion = fact.data?.meses ?? [];
-      opcionesFiltro.mesesPago = pago.data?.meses ?? [];
+      return {
+        mesesFacturacion: fact.data?.meses ?? [],
+        mesesPago: pago.data?.meses ?? [],
+      };
     } catch {
-      /* dropdowns vacíos si aún no hay colección Factura */
+      return { mesesFacturacion: [] as string[], mesesPago: [] as string[] };
     }
+  }
+
+  function combinarMeses(apiMeses: string[], filaMeses: string[]): string[] {
+    return [...new Set([...apiMeses, ...filaMeses])].sort((a, b) => b.localeCompare(a));
   }
 
   let columnasTabla = $derived(() => {
@@ -54,27 +100,12 @@
       resumen.mapeo.conceptoFactura,
       resumen.mapeo.areaVenta,
       resumen.mapeo.total,
+      resumen.mapeo.fechaPago,
       resumen.mapeo.estatusPago,
     ].filter(Boolean) as string[];
   });
 
-  function extraerOpciones(data: ResumenModulo) {
-    const m = data.mapeo;
-    const filas = data.filas ?? [];
-    return {
-      clientes: m.cliente
-        ? [...new Set(filas.map((f) => String(f[m.cliente!] ?? '').trim()).filter(Boolean))].sort()
-        : [],
-      areas: m.areaVenta
-        ? [...new Set(filas.map((f) => String(f[m.areaVenta!] ?? '').trim()).filter(Boolean))].sort()
-        : [],
-      estatus: m.estatusPago
-        ? [...new Set(filas.map((f) => String(f[m.estatusPago!] ?? '').trim()).filter(Boolean))].sort()
-        : [],
-    };
-  }
-
-  async function cargarDatos(cargarOpciones = false) {
+  async function cargarDatos(cargarOpciones = false, mesesApi?: { mesesFacturacion: string[]; mesesPago: string[] }) {
     cargando = true;
     error = '';
 
@@ -95,7 +126,12 @@
     try {
       resumen = await api<ResumenModulo>(endpoint);
       if (cargarOpciones && resumen) {
-        opcionesFiltro = extraerOpciones(resumen);
+        const deFilas = extraerOpciones(resumen);
+        opcionesFiltro = {
+          ...deFilas,
+          mesesFacturacion: combinarMeses(mesesApi?.mesesFacturacion ?? [], deFilas.mesesFacturacion),
+          mesesPago: combinarMeses(mesesApi?.mesesPago ?? [], deFilas.mesesPago),
+        };
       }
     } catch (err) {
       error = err instanceof Error ? err.message : 'Error al cargar facturación';
@@ -105,10 +141,10 @@
     }
   }
 
-  onMount(() => {
+  onMount(async () => {
     filtros = cargarFiltrosFacturacionGuardados();
-    cargarMesesDisponibles();
-    cargarDatos(true);
+    const mesesApi = await cargarMesesDisponibles();
+    await cargarDatos(true, mesesApi);
   });
 
   function aplicarFiltros() {
@@ -124,9 +160,23 @@
 
   function valorCelda(fila: Record<string, unknown>, columna: string): string {
     const valor = fila[columna];
-    if (columna === resumen?.mapeo.total) {
+    const m = resumen?.mapeo;
+    if (columna === m?.total) {
       const numero = Number(String(valor ?? '').replace(/[$,\s]/g, ''));
       return Number.isFinite(numero) ? formatearMoneda(numero) : String(valor ?? '');
+    }
+    if (columna === m?.fechaFacturacion || columna === m?.fechaPago) {
+      if (valor === null || valor === undefined || valor === '') return '';
+      const iso =
+        valor instanceof Date
+          ? valor.toISOString()
+          : typeof valor === 'string' && /^\d{1,2}-[A-Za-z]{3}-\d{2,4}$/.test(valor.trim())
+            ? valor
+            : String(valor);
+      if (typeof iso === 'string' && /^\d{1,2}-[A-Za-z]{3}-\d{2,4}$/.test(iso.trim())) {
+        return iso.trim();
+      }
+      return formatearFecha(iso);
     }
     return valor === null || valor === undefined ? '' : String(valor);
   }
