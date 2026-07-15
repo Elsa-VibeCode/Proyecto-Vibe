@@ -15,6 +15,10 @@ import {
   resumenClasificacionDesdeFilas,
 } from '../services/facturaFacturacionAdapter.js';
 import {
+  mesesFacturacionDisponibles,
+  mesesPagoDisponibles,
+} from '../services/facturaService.js';
+import {
   enriquecerFilasFacturacion,
   resumenClasificacionFacturacion,
 } from '../utils/clasificacionMotor.js';
@@ -161,6 +165,11 @@ async function construirResumen(importacion, filtros = {}, usuarioId = null) {
     resumen.facturacion = calcularResumenFacturacion(filasFiltradas, mapeo);
     resumen.clasificacionFacturacion = infoFacturacionClasificacion;
     resumen.filas = filasFiltradas;
+    const hayFacturas = await Factura.countDocuments();
+    if (hayFacturas > 0) {
+      resumen.mesesFacturacion = await mesesFacturacionDisponibles();
+      resumen.mesesPago = await mesesPagoDisponibles();
+    }
   } else if (tipoHoja === 'resumen-mensual') {
     resumen.finanzas = calcularResumenFinanzas(filasFiltradas, importacion.columnas);
     resumen.aportacionesGrupo = calcularResumenAportacionesGrupo(

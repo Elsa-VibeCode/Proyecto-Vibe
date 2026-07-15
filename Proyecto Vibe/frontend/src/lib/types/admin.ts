@@ -187,6 +187,8 @@ export interface ResumenModulo {
   conciliacionesDisponibles?: ConciliacionPeriodo[];
   aportacionesGrupo?: ResumenAportacionesGrupo;
   filas?: Record<string, unknown>[];
+  mesesFacturacion?: string[];
+  mesesPago?: string[];
 }
 
 export interface MesAportacion {

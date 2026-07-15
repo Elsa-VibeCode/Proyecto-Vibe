@@ -91,6 +91,26 @@
     return [...new Set([...apiMeses, ...filaMeses])].sort((a, b) => b.localeCompare(a));
   }
 
+  function etiquetaMes(yyyyMm: string): string {
+    const [y, m] = yyyyMm.split('-');
+    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const idx = Number(m) - 1;
+    if (!y || idx < 0 || idx > 11) return yyyyMm;
+    return `${meses[idx]} ${y}`;
+  }
+
+  function actualizarOpcionesFiltro(data: ResumenModulo, mesesApi?: { mesesFacturacion: string[]; mesesPago: string[] }) {
+    const deFilas = extraerOpciones(data);
+    opcionesFiltro = {
+      ...deFilas,
+      mesesFacturacion: combinarMeses(
+        data.mesesFacturacion ?? mesesApi?.mesesFacturacion ?? [],
+        deFilas.mesesFacturacion
+      ),
+      mesesPago: combinarMeses(data.mesesPago ?? mesesApi?.mesesPago ?? [], deFilas.mesesPago),
+    };
+  }
+
   let columnasTabla = $derived(() => {
     if (!resumen?.mapeo) return [];
     return [
@@ -125,13 +145,19 @@
 
     try {
       resumen = await api<ResumenModulo>(endpoint);
-      if (cargarOpciones && resumen) {
-        const deFilas = extraerOpciones(resumen);
-        opcionesFiltro = {
-          ...deFilas,
-          mesesFacturacion: combinarMeses(mesesApi?.mesesFacturacion ?? [], deFilas.mesesFacturacion),
-          mesesPago: combinarMeses(mesesApi?.mesesPago ?? [], deFilas.mesesPago),
-        };
+      if (resumen) {
+        if (cargarOpciones) {
+          actualizarOpcionesFiltro(resumen, mesesApi);
+        } else if (resumen.mesesFacturacion?.length || resumen.mesesPago?.length) {
+          opcionesFiltro = {
+            ...opcionesFiltro,
+            mesesFacturacion: combinarMeses(
+              resumen.mesesFacturacion ?? [],
+              opcionesFiltro.mesesFacturacion
+            ),
+            mesesPago: combinarMeses(resumen.mesesPago ?? [], opcionesFiltro.mesesPago),
+          };
+        }
       }
     } catch (err) {
       error = err instanceof Error ? err.message : 'Error al cargar facturación';
@@ -327,7 +353,7 @@
           <select id="f-mes-fact" class="select" bind:value={filtros.mesFacturacion}>
             <option value="">Todos</option>
             {#each mesesFacturacion as mes}
-              <option value={mes}>{mes}</option>
+              <option value={mes}>{etiquetaMes(mes)}</option>
             {/each}
           </select>
         </div>
@@ -336,7 +362,7 @@
           <select id="f-mes-pago" class="select" bind:value={filtros.mesPago}>
             <option value="">Todos</option>
             {#each mesesPago as mes}
-              <option value={mes}>{mes}</option>
+              <option value={mes}>{etiquetaMes(mes)}</option>
             {/each}
           </select>
         </div>
