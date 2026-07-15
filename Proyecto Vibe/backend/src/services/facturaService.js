@@ -81,19 +81,64 @@ export function normalizarEstatusEnvio(valor) {
 }
 
 // ---- Filtros de listado ----
-export function construirFiltroFacturas({ mes, unidad, cliente, estatusPago, sinClasificar, q } = {}) {
-  const filtro = {};
-  if (mes) filtro.mes = mes;
-  if (estatusPago) filtro.estatusPago = estatusPago;
-  if (cliente) filtro.cliente = { $regex: escaparRegex(cliente), $options: 'i' };
+export function rangoMesUtc(yyyyMm) {
+  const [year, month] = String(yyyyMm ?? '').split('-').map(Number);
+  if (!year || !month) return null;
+  return {
+    $gte: new Date(Date.UTC(year, month - 1, 1)),
+    $lt: new Date(Date.UTC(year, month, 1)),
+  };
+}
 
-  if (unidad) {
-    // "Consulting" incluye la unidad legacy "Strategy".
-    filtro.unidad = unidad === 'Consulting' ? { $in: ['Consulting', 'Strategy'] } : unidad;
+export function construirFiltroFacturas(query = {}) {
+  const {
+    mes,
+    mesFacturacion,
+    mesPago,
+    unidad,
+    areaVenta,
+    cliente,
+    estatusPago,
+    sinClasificar,
+    totalMin,
+    totalMax,
+    q,
+  } = query;
+
+  const filtro = {};
+
+  const mesF = mesFacturacion || mes;
+  if (mesF) filtro.mes = mesF;
+
+  if (mesPago) {
+    const rango = rangoMesUtc(mesPago);
+    if (rango) filtro.fechaPago = rango;
+  }
+
+  if (estatusPago) {
+    const enumVal = normalizarEstatusPago(estatusPago);
+    if (enumVal) filtro.estatusPago = enumVal;
+  }
+
+  const area = areaVenta || unidad;
+  if (area) {
+    if (area === 'Consulting' || area === 'Strategy') {
+      filtro.unidad = { $in: ['Consulting', 'Strategy'] };
+    } else {
+      filtro.unidad = area;
+    }
   }
 
   if (sinClasificar === 'true' || sinClasificar === true) {
     filtro.unidad = null;
+  }
+
+  if (cliente) filtro.cliente = cliente;
+
+  if (totalMin || totalMax) {
+    filtro.total = {};
+    if (totalMin) filtro.total.$gte = Number(totalMin);
+    if (totalMax) filtro.total.$lte = Number(totalMax);
   }
 
   if (q) {
@@ -104,24 +149,38 @@ export function construirFiltroFacturas({ mes, unidad, cliente, estatusPago, sin
   return filtro;
 }
 
-// ---- Totales por mes ----
-export async function totalesFacturas(mes) {
+export function construirFiltroFacturasMongo(query = {}) {
+  return construirFiltroFacturas(query);
+}
+
+// ---- Totales (respeta los mismos filtros que el listado) ----
+export async function totalesFacturas(filtros = {}) {
+  const base = construirFiltroFacturas(filtros);
   const match = {
-    estatusPago: { $ne: 'CANCELADO' },
+    ...base,
     estatusEnvio: { $ne: 'CANCELADA' },
   };
-  if (mes) match.mes = mes;
+  if (!base.estatusPago) {
+    match.estatusPago = { $ne: 'CANCELADO' };
+  }
 
   const facturas = await Factura.find(match).select('unidad total estatusPago').lean();
 
   const porUnidad = { Consulting: 0, Technologies: 0, Grupo: 0, sin_clasificar: 0 };
   let facturado = 0;
   let pagado = 0;
+  let cantidadPagadas = 0;
+  let cantidadPendientes = 0;
 
   for (const f of facturas) {
     const monto = Number(f.total) || 0;
     facturado += monto;
-    if (f.estatusPago === 'PAGADO') pagado += monto;
+    if (f.estatusPago === 'PAGADO') {
+      pagado += monto;
+      cantidadPagadas += 1;
+    } else {
+      cantidadPendientes += 1;
+    }
     const u = unidadEfectiva(f.unidad);
     porUnidad[u] = (porUnidad[u] || 0) + monto;
   }
@@ -133,7 +192,25 @@ export async function totalesFacturas(mes) {
     pagado: redondear(pagado),
     pendiente: redondear(facturado - pagado),
     porUnidad,
+    facturas: facturas.length,
+    cantidadPagadas,
+    cantidadPendientes,
   };
+}
+
+export async function mesesFacturacionDisponibles() {
+  const meses = await Factura.distinct('mes');
+  return meses.filter(Boolean).sort((a, b) => b.localeCompare(a));
+}
+
+export async function mesesPagoDisponibles() {
+  const resultado = await Factura.aggregate([
+    { $match: { fechaPago: { $ne: null } } },
+    { $project: { mes: { $dateToString: { format: '%Y-%m', date: '$fechaPago' } } } },
+    { $group: { _id: '$mes' } },
+    { $sort: { _id: -1 } },
+  ]);
+  return resultado.map((m) => m._id).filter(Boolean);
 }
 
 export async function clientesDistintos() {
@@ -154,6 +231,21 @@ function folioSintetico(cliente, fecha, total, concepto) {
 function aFecha(valor) {
   if (!valor) return null;
   if (valor instanceof Date) return Number.isNaN(valor.getTime()) ? null : valor;
+
+  const texto = String(valor).trim();
+  const mesesAbrev = {
+    ene: 0, feb: 1, mar: 2, abr: 3, may: 4, jun: 5,
+    jul: 6, ago: 7, sep: 8, oct: 9, nov: 10, dic: 11,
+  };
+  const match = texto.match(/^(\d{1,2})-([A-Za-zÁ-ú]{3})-(\d{2,4})$/);
+  if (match) {
+    const dia = Number(match[1]);
+    const mes = mesesAbrev[match[2].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').slice(0, 3)];
+    let anio = Number(match[3]);
+    if (anio < 100) anio += 2000;
+    if (mes !== undefined && dia > 0) return new Date(Date.UTC(anio, mes, dia));
+  }
+
   const d = new Date(valor);
   return Number.isNaN(d.getTime()) ? null : d;
 }

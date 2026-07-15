@@ -3,6 +3,8 @@ export interface ResumenFacturacion {
   totalPagado: number;
   totalPendiente: number;
   facturas: number;
+  cantidadPagadas?: number;
+  cantidadPendientes?: number;
   porCliente: { nombre: string; facturas: number; monto: number }[];
   porArea: { nombre: string; facturas: number; monto: number }[];
   porUnidad?: { nombre: string; facturas: number; monto: number }[];
@@ -271,20 +273,46 @@ export interface FiltrosFacturacion {
   cliente: string;
   areaVenta: string;
   estatusPago: string;
+  mesFacturacion: string;
+  mesPago: string;
   totalMin: string;
   totalMax: string;
   soloSinClasificar: string;
   estadoClasificacion: string;
 }
 
+const STORAGE_KEY_FACTURACION = 'facturacion-filtros';
+
 export function filtrosFacturacionVacios(): FiltrosFacturacion {
   return {
     cliente: '',
     areaVenta: '',
     estatusPago: '',
+    mesFacturacion: '',
+    mesPago: '',
     totalMin: '',
     totalMax: '',
     soloSinClasificar: '',
     estadoClasificacion: '',
   };
+}
+
+export function cargarFiltrosFacturacionGuardados(): FiltrosFacturacion {
+  if (typeof localStorage === 'undefined') return filtrosFacturacionVacios();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_FACTURACION);
+    if (!raw) return filtrosFacturacionVacios();
+    return { ...filtrosFacturacionVacios(), ...JSON.parse(raw) };
+  } catch {
+    return filtrosFacturacionVacios();
+  }
+}
+
+export function guardarFiltrosFacturacion(filtros: FiltrosFacturacion) {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY_FACTURACION, JSON.stringify(filtros));
+  } catch {
+    /* ignore */
+  }
 }

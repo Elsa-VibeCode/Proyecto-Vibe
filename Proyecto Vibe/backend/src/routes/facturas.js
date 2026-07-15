@@ -10,6 +10,8 @@ import {
   clasificarPorCliente,
   calcularIva,
   migrarFacturasDesdeExcel,
+  mesesFacturacionDisponibles,
+  mesesPagoDisponibles,
 } from '../services/facturaService.js';
 
 const router = Router();
@@ -43,9 +45,19 @@ router.get('/', async (req, res) => {
   });
 });
 
-// GET /api/facturas/totales?mes=YYYY-MM
+// GET /api/facturas/totales — acepta los mismos filtros que el listado
 router.get('/totales', async (req, res) => {
-  ok(res, await totalesFacturas(req.query.mes));
+  ok(res, await totalesFacturas(req.query));
+});
+
+// GET /api/facturas/meses-facturacion
+router.get('/meses-facturacion', async (_req, res) => {
+  ok(res, { meses: await mesesFacturacionDisponibles() });
+});
+
+// GET /api/facturas/meses-pago
+router.get('/meses-pago', async (_req, res) => {
+  ok(res, { meses: await mesesPagoDisponibles() });
 });
 
 // GET /api/facturas/clientes → distinct (facturas + mapa) para autocompletar
