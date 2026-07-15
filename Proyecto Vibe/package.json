@@ -7,6 +7,9 @@
     "install:all": "npm install --prefix backend && npm install --prefix frontend",
     "dev:backend": "npm run dev --prefix backend",
     "dev:frontend": "npm run dev --prefix frontend",
-    "seed": "npm run seed --prefix backend"
+    "seed": "npm run seed --prefix backend",
+    "seed:tipos-gasto": "node --env-file-if-exists=backend/.env backend/scripts/seed-tipos-gasto.js",
+    "seed:config": "node --env-file-if-exists=backend/.env backend/scripts/seed-config.js",
+    "import:egresos": "node --env-file-if-exists=backend/.env backend/scripts/import-egresos-excel.js"
   }
 }

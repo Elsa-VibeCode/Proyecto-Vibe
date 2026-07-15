@@ -9,6 +9,16 @@ export function formatearFecha(fecha: string | null | undefined): string {
   });
 }
 
+export function formatearMoneda(valor: number | null | undefined): string {
+  const n = Number(valor) || 0;
+  return n.toLocaleString('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function etiquetaRol(rol: Rol): string {
   const etiquetas: Record<Rol, string> = {
     admin: 'Administrador',
