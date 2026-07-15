@@ -1,4 +1,4 @@
-import { unidadEfectiva } from '../models/Factura.js';
+import { unidadEfectiva, esFechaFacturaValida } from '../models/Factura.js';
 import {
   normalizarClave,
   crearIndiceMapaUnidades,
@@ -35,6 +35,7 @@ function areaVentaDisplay(unidad) {
 
 function estadoClasificacionDesdeFactura(factura, indice) {
   if (!factura.unidad) return 'no_encontrado';
+  if (factura.unidadManual) return 'manual';
   const entrada = indice.get(normalizarClave(factura.cliente));
   if (factura.clasificacionAuto && entrada) {
     return entrada.estado === 'confirmado' ? 'auto_confirmado' : 'por_confirmar';
@@ -56,9 +57,9 @@ export function facturaAFilaExcel(factura, mapeo, indiceMapa) {
     if (col) fila[col] = valor ?? '';
   };
 
-  set('fechaFacturacion', factura.fechaFacturacion);
+  set('fechaFacturacion', esFechaFacturaValida(factura.fechaFacturacion) ? factura.fechaFacturacion : '');
   set('noFactura', factura.noFactura);
-  set('fechaPago', factura.fechaPago);
+  set('fechaPago', esFechaFacturaValida(factura.fechaPago) ? factura.fechaPago : '');
   set('cliente', factura.cliente);
   set('conceptoFactura', factura.concepto);
   set('areaVenta', areaVentaDisplay(factura.unidad));
@@ -71,6 +72,8 @@ export function facturaAFilaExcel(factura, mapeo, indiceMapa) {
 
   return {
     ...fila,
+    facturaId: String(factura._id),
+    unidadManual: Boolean(factura.unidadManual),
     unidadClasificada,
     estadoClasificacion,
     excluidoDeTotales,

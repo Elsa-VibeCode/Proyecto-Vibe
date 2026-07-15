@@ -14,9 +14,16 @@ export function unidadEfectiva(unidad) {
   return unidad;
 }
 
-export function mesDesdeFecha(fecha) {
+export function esFechaFacturaValida(fecha) {
+  if (!fecha) return false;
   const d = fecha instanceof Date ? fecha : new Date(fecha);
-  if (Number.isNaN(d.getTime())) return '';
+  if (Number.isNaN(d.getTime()) || d.getTime() <= 0) return false;
+  return d.getUTCFullYear() >= 2000;
+}
+
+export function mesDesdeFecha(fecha) {
+  if (!esFechaFacturaValida(fecha)) return '';
+  const d = fecha instanceof Date ? fecha : new Date(fecha);
   return d.toISOString().slice(0, 7); // "YYYY-MM"
 }
 
@@ -29,6 +36,7 @@ const facturaSchema = new mongoose.Schema(
     cliente: { type: String, required: true, trim: true, index: true },
     concepto: { type: String, trim: true, default: '' },
     unidad: { type: String, enum: [...UNIDADES_FACTURA, null], default: null },
+    unidadManual: { type: Boolean, default: false }, // true = asignada factura por factura (no se sobrescribe)
     subtotal: { type: Number, default: 0 },
     iva: { type: Number, default: 0 },
     total: { type: Number, default: 0 },

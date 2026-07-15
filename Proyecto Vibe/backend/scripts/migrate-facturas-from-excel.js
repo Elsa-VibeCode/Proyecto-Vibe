@@ -32,6 +32,7 @@ console.log(`Filas en ExcelImport: ${resumen.origenImport.totalFilas}`);
 console.log(`Procesadas (con datos): ${resumen.procesadas}`);
 console.log(`Migradas (únicas):      ${resumen.migradas}`);
 console.log(`Omitidas (sin datos):   ${resumen.omitidasSinDatos}`);
+console.log(`Omitidas (sin fecha):   ${resumen.omitidasSinFecha ?? 0}`);
 console.log(`Duplicados en fuente:   ${resumen.duplicadosEnFuente}`);
 console.log(`Canceladas:             ${resumen.canceladas}`);
 console.log(`Sin clasificar:         ${resumen.sinClasificar}`);

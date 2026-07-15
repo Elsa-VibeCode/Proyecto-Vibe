@@ -8,6 +8,7 @@ import {
   clientesDistintos,
   construirIndiceMapa,
   clasificarPorCliente,
+  clasificarFactura,
   calcularIva,
   migrarFacturasDesdeExcel,
   mesesFacturacionDisponibles,
@@ -15,6 +16,8 @@ import {
 } from '../services/facturaService.js';
 
 const router = Router();
+
+const ROLES_EDICION = ['admin', 'editor'];
 
 const ok = (res, data, status = 200) => res.status(status).json({ ok: true, data });
 const fail = (res, error, status = 400) => res.status(status).json({ ok: false, error });
@@ -74,6 +77,20 @@ router.post('/migrar', requiereRol('admin'), async (req, res) => {
   ok(res, resumen);
 });
 
+// PATCH /api/facturas/:id/clasificar → unidad por factura (ej. ENLAC con distintas unidades)
+router.patch('/:id/clasificar', requiereRol(...ROLES_EDICION), async (req, res) => {
+  const unidad = String(req.body?.unidad ?? '').trim();
+  if (!unidad) return fail(res, 'Indique la unidad (Consulting, Technologies o Grupo)');
+
+  try {
+    const factura = await clasificarFactura(req.params.id, unidad);
+    if (!factura) return fail(res, 'Factura no encontrada', 404);
+    ok(res, { factura });
+  } catch (err) {
+    fail(res, err instanceof Error ? err.message : 'No se pudo clasificar', 400);
+  }
+});
+
 // GET /api/facturas/:id
 router.get('/:id', async (req, res) => {
   const factura = await Factura.findById(req.params.id);
@@ -115,7 +132,8 @@ async function prepararFactura(body) {
     datos.unidad = unidad;
     datos.clasificacionAuto = clasificacionAuto;
   } else {
-    datos.clasificacionAuto = false; // override manual
+    datos.clasificacionAuto = false;
+    datos.unidadManual = true;
   }
 
   return datos;
@@ -150,7 +168,7 @@ router.put('/:id', validaciones, async (req, res) => {
   const campos = [
     'fechaFacturacion', 'fechaPago', 'noFactura', 'cliente', 'concepto', 'unidad',
     'subtotal', 'iva', 'total', 'estatusEnvio', 'estatusPago', 'complementoPago',
-    'rfcEmisor', 'clasificacionAuto',
+    'rfcEmisor', 'clasificacionAuto', 'unidadManual',
   ];
   for (const campo of campos) {
     if (datos[campo] !== undefined) factura[campo] = datos[campo];

@@ -15,10 +15,13 @@ export interface ResumenClasificacionFacturacion {
   total: number;
   autoConfirmado: number;
   porConfirmar: number;
+  manual?: number;
   noEncontrado: number;
   cancelados: number;
   activos: number;
 }
+
+export type UnidadFactura = 'Consulting' | 'Technologies' | 'Grupo';
 
 export interface ClasificacionFacturacionInfo {
   resumen: ResumenClasificacionFacturacion;
