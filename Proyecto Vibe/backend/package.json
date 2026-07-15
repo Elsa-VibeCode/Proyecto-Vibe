@@ -10,7 +10,8 @@
     "seed": "node --env-file=.env src/seed.js",
     "seed:mapas": "node --env-file=.env src/seedMapas.js",
     "seed:colaboradores": "node --env-file=.env src/seedColaboradores.js",
-    "users:promote": "node --env-file=.env src/scripts/promoteUser.js"
+    "users:promote": "node --env-file=.env src/scripts/promoteUser.js",
+    "migrate:facturas": "node --env-file=.env scripts/migrate-facturas-from-excel.js"
   },
   "dependencies": {
     "@clerk/backend": "^3.8.3",
