@@ -10,6 +10,7 @@
     "seed": "npm run seed --prefix backend",
     "seed:tipos-gasto": "node --env-file-if-exists=backend/.env backend/scripts/seed-tipos-gasto.js",
     "seed:config": "node --env-file-if-exists=backend/.env backend/scripts/seed-config.js",
-    "import:egresos": "node --env-file-if-exists=backend/.env backend/scripts/import-egresos-excel.js"
+    "import:egresos": "node --env-file-if-exists=backend/.env backend/scripts/import-egresos-excel.js",
+    "migrate:facturas": "node --env-file-if-exists=backend/.env backend/scripts/migrate-facturas-from-excel.js"
   }
 }
