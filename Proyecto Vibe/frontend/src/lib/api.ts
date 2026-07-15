@@ -96,7 +96,8 @@ export async function api<T>(endpoint: string, opciones: OpcionesFetch = {}): Pr
   const datos = await respuesta.json().catch(() => null);
 
   if (!respuesta.ok) {
-    const mensaje = (datos as { mensaje?: string })?.mensaje;
+    const mensaje = (datos as { mensaje?: string; error?: string })?.mensaje
+      ?? (datos as { error?: string })?.error;
     if (respuesta.status === 404 && mensaje === 'Ruta no encontrada') {
       throw new Error(
         'La API no respondió en la ruta esperada. En Render, PUBLIC_API_URL debe terminar en /api (ejemplo: https://proyecto-vibe-1.onrender.com/api).'

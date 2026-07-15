@@ -6,13 +6,19 @@ import {
   construirFiltroFacturas,
   totalesFacturas,
   clientesDistintos,
-  construirIndiceMapa,
-  clasificarPorCliente,
   clasificarFactura,
-  calcularIva,
   migrarFacturasDesdeExcel,
   mesesFacturacionDisponibles,
   mesesPagoDisponibles,
+  folioDisponible,
+  historialCliente,
+  conceptosDeCliente,
+  softDeleteFactura,
+  prepararDatosFactura,
+  validarReglasFactura,
+  registrarHistorialFactura,
+  diffFactura,
+  FILTRO_ACTIVAS,
 } from '../services/facturaService.js';
 
 const router = Router();
@@ -23,8 +29,6 @@ const ok = (res, data, status = 200) => res.status(status).json({ ok: true, data
 const fail = (res, error, status = 400) => res.status(status).json({ ok: false, error });
 
 router.use(protegerRuta);
-
-const redondear = (v) => Math.round((Number(v) || 0) * 100) / 100;
 
 // GET /api/facturas → lista con filtros + paginación
 router.get('/', async (req, res) => {
@@ -48,28 +52,44 @@ router.get('/', async (req, res) => {
   });
 });
 
-// GET /api/facturas/totales — acepta los mismos filtros que el listado
 router.get('/totales', async (req, res) => {
   ok(res, await totalesFacturas(req.query));
 });
 
-// GET /api/facturas/meses-facturacion
 router.get('/meses-facturacion', async (_req, res) => {
   ok(res, { meses: await mesesFacturacionDisponibles() });
 });
 
-// GET /api/facturas/meses-pago
 router.get('/meses-pago', async (_req, res) => {
   ok(res, { meses: await mesesPagoDisponibles() });
 });
 
-// GET /api/facturas/clientes → distinct (facturas + mapa) para autocompletar
 router.get('/clientes', async (_req, res) => {
   ok(res, { clientes: await clientesDistintos() });
 });
 
-// POST /api/facturas/migrar → migra desde la última importación de facturación (admin)
-// ?dryRun=1 para solo obtener el resumen sin escribir.
+router.get('/check-folio', async (req, res) => {
+  const noFactura = String(req.query.noFactura ?? '').trim();
+  if (!noFactura) return fail(res, 'Indique el número de factura');
+  const excludeId = req.query.excludeId ? String(req.query.excludeId) : null;
+  const disponible = await folioDisponible(noFactura, excludeId);
+  ok(res, { noFactura, disponible });
+});
+
+router.get('/cliente-historial', async (req, res) => {
+  const cliente = String(req.query.cliente ?? '').trim();
+  if (!cliente) return fail(res, 'Indique el cliente');
+  const historial = await historialCliente(cliente);
+  if (!historial) return fail(res, 'Cliente no indicado');
+  ok(res, historial);
+});
+
+router.get('/conceptos', async (req, res) => {
+  const cliente = String(req.query.cliente ?? '').trim();
+  if (!cliente) return fail(res, 'Indique el cliente');
+  ok(res, { conceptos: await conceptosDeCliente(cliente) });
+});
+
 router.post('/migrar', requiereRol('admin'), async (req, res) => {
   const dryRun = req.query.dryRun === '1' || req.body?.dryRun === true;
   const resumen = await migrarFacturasDesdeExcel({ dryRun });
@@ -77,7 +97,6 @@ router.post('/migrar', requiereRol('admin'), async (req, res) => {
   ok(res, resumen);
 });
 
-// PATCH /api/facturas/:id/clasificar → unidad por factura (ej. ENLAC con distintas unidades)
 router.patch('/:id/clasificar', requiereRol(...ROLES_EDICION), async (req, res) => {
   const unidad = String(req.body?.unidad ?? '').trim();
   if (!unidad) return fail(res, 'Indique la unidad (Consulting, Technologies o Grupo)');
@@ -91,9 +110,8 @@ router.patch('/:id/clasificar', requiereRol(...ROLES_EDICION), async (req, res) 
   }
 });
 
-// GET /api/facturas/:id
 router.get('/:id', async (req, res) => {
-  const factura = await Factura.findById(req.params.id);
+  const factura = await Factura.findOne({ _id: req.params.id, ...FILTRO_ACTIVAS });
   if (!factura) return fail(res, 'Factura no encontrada', 404);
   ok(res, { factura });
 });
@@ -102,6 +120,8 @@ const validaciones = [
   body('fechaFacturacion').notEmpty().withMessage('La fecha de facturación es obligatoria'),
   body('noFactura').trim().notEmpty().withMessage('El número de factura es obligatorio'),
   body('cliente').trim().notEmpty().withMessage('El cliente es obligatorio'),
+  body('concepto').trim().notEmpty().withMessage('El concepto es obligatorio'),
+  body('unidad').trim().notEmpty().withMessage('La unidad de negocio es obligatoria'),
   body('subtotal').isFloat({ gt: 0 }).withMessage('El subtotal debe ser mayor a 0'),
 ];
 
@@ -114,74 +134,83 @@ function primerError(req, res) {
   return false;
 }
 
-// Asigna unidad/clasificación e iva/total coherentes a partir del body.
-async function prepararFactura(body) {
-  const datos = { ...body };
-  const subtotal = Number(datos.subtotal) || 0;
+router.post('/', requiereRol(...ROLES_EDICION), validaciones, async (req, res) => {
+  if (primerError(req, res)) return;
 
-  // IVA/total: usa lo enviado o autocalcula (NOVAMEX → IVA 0).
-  const iva = datos.iva !== undefined && datos.iva !== '' ? Number(datos.iva) : calcularIva(subtotal, datos.cliente);
-  datos.iva = redondear(iva);
-  datos.subtotal = redondear(subtotal);
-  datos.total = datos.total !== undefined && datos.total !== '' ? redondear(datos.total) : redondear(subtotal + datos.iva);
+  try {
+    const datos = await prepararDatosFactura(req.body);
+    validarReglasFactura(datos);
 
-  // Clasificación: si no se envía unidad, autoclasifica por cliente.
-  if (datos.unidad === undefined || datos.unidad === '' || datos.unidad === null) {
-    const indice = await construirIndiceMapa();
-    const { unidad, clasificacionAuto } = clasificarPorCliente(datos.cliente, indice);
-    datos.unidad = unidad;
-    datos.clasificacionAuto = clasificacionAuto;
-  } else {
-    datos.clasificacionAuto = false;
-    datos.unidadManual = true;
+    const disponible = await folioDisponible(datos.noFactura);
+    if (!disponible) return fail(res, 'Ya existe una factura con ese número', 409);
+
+    datos.origen = 'manual';
+    const factura = await Factura.create(datos);
+    await registrarHistorialFactura(
+      factura._id,
+      'crear',
+      CAMPOS_CREACION(datos),
+      req.usuario?._id
+    );
+    ok(res, { factura }, 201);
+  } catch (err) {
+    fail(res, err instanceof Error ? err.message : 'No se pudo crear la factura', 400);
   }
+});
 
-  return datos;
+router.put('/:id', requiereRol(...ROLES_EDICION), validaciones, async (req, res) => {
+  if (primerError(req, res)) return;
+
+  const factura = await Factura.findOne({ _id: req.params.id, ...FILTRO_ACTIVAS });
+  if (!factura) return fail(res, 'Factura no encontrada', 404);
+
+  try {
+    if (req.body.noFactura && req.body.noFactura.trim() !== factura.noFactura) {
+      const disponible = await folioDisponible(req.body.noFactura.trim(), factura._id);
+      if (!disponible) return fail(res, 'Ya existe una factura con ese número', 409);
+    }
+
+    const antes = factura.toObject();
+    const datos = await prepararDatosFactura(req.body);
+    validarReglasFactura(datos);
+
+    const campos = [
+      'fechaFacturacion', 'fechaPago', 'noFactura', 'cliente', 'concepto', 'unidad',
+      'subtotal', 'iva', 'total', 'estatusEnvio', 'estatusPago', 'complementoPago',
+      'rfcEmisor', 'clasificacionAuto', 'unidadManual',
+    ];
+    for (const campo of campos) {
+      if (datos[campo] !== undefined) factura[campo] = datos[campo];
+    }
+    await factura.save();
+
+    const cambios = diffFactura(antes, factura.toObject());
+    await registrarHistorialFactura(factura._id, 'actualizar', cambios, req.usuario?._id);
+
+    ok(res, { factura });
+  } catch (err) {
+    fail(res, err instanceof Error ? err.message : 'No se pudo actualizar la factura', 400);
+  }
+});
+
+router.delete('/:id', requiereRol(...ROLES_EDICION), async (req, res) => {
+  const factura = await softDeleteFactura(req.params.id);
+  if (!factura) return fail(res, 'Factura no encontrada', 404);
+
+  await registrarHistorialFactura(
+    factura._id,
+    'eliminar',
+    [{ campo: 'deletedAt', anterior: null, nuevo: factura.deletedAt?.toISOString() ?? null }],
+    req.usuario?._id
+  );
+
+  ok(res, { mensaje: 'Factura eliminada correctamente', factura });
+});
+
+function CAMPOS_CREACION(datos) {
+  return Object.entries(datos)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([campo, nuevo]) => ({ campo, anterior: null, nuevo }));
 }
-
-// POST /api/facturas
-router.post('/', validaciones, async (req, res) => {
-  if (primerError(req, res)) return;
-
-  const existe = await Factura.findOne({ noFactura: req.body.noFactura.trim() });
-  if (existe) return fail(res, 'Ya existe una factura con ese número', 409);
-
-  const datos = await prepararFactura(req.body);
-  datos.origen = 'manual';
-  const factura = await Factura.create(datos);
-  ok(res, { factura }, 201);
-});
-
-// PUT /api/facturas/:id
-router.put('/:id', validaciones, async (req, res) => {
-  if (primerError(req, res)) return;
-
-  const factura = await Factura.findById(req.params.id);
-  if (!factura) return fail(res, 'Factura no encontrada', 404);
-
-  if (req.body.noFactura && req.body.noFactura.trim() !== factura.noFactura) {
-    const existe = await Factura.findOne({ noFactura: req.body.noFactura.trim(), _id: { $ne: factura._id } });
-    if (existe) return fail(res, 'Ya existe una factura con ese número', 409);
-  }
-
-  const datos = await prepararFactura(req.body);
-  const campos = [
-    'fechaFacturacion', 'fechaPago', 'noFactura', 'cliente', 'concepto', 'unidad',
-    'subtotal', 'iva', 'total', 'estatusEnvio', 'estatusPago', 'complementoPago',
-    'rfcEmisor', 'clasificacionAuto', 'unidadManual',
-  ];
-  for (const campo of campos) {
-    if (datos[campo] !== undefined) factura[campo] = datos[campo];
-  }
-  await factura.save();
-  ok(res, { factura });
-});
-
-// DELETE /api/facturas/:id
-router.delete('/:id', async (req, res) => {
-  const factura = await Factura.findByIdAndDelete(req.params.id);
-  if (!factura) return fail(res, 'Factura no encontrada', 404);
-  ok(res, { mensaje: 'Factura eliminada correctamente' });
-});
 
 export default router;

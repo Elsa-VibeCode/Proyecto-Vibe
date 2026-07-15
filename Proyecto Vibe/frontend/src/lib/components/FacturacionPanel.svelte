@@ -4,11 +4,21 @@
   import { api } from '$lib/api';
   import { formatearMoneda } from '$lib/excelFiltros';
   import { formatearFecha } from '$lib/utils';
-  import type { FiltrosFacturacion, ResumenModulo, UnidadFactura } from '$lib/types/admin';
+  import Modal from '$lib/components/Modal.svelte';
+  import Toast from '$lib/components/Toast.svelte';
+  import FacturaForm from '$lib/components/FacturaForm.svelte';
+  import type {
+    FacturaDocument,
+    FacturaPayload,
+    FiltrosFacturacion,
+    ResumenModulo,
+    UnidadFactura,
+  } from '$lib/types/admin';
   import {
     filtrosFacturacionVacios,
     cargarFiltrosFacturacionGuardados,
     guardarFiltrosFacturacion,
+    limpiarBorradorFactura,
   } from '$lib/types/admin';
 
   let resumen = $state<ResumenModulo | null>(null);
@@ -25,6 +35,18 @@
     mesesFacturacion: [] as string[],
     mesesPago: [] as string[],
   });
+
+  let modalFacturaAbierto = $state(false);
+  let modoFacturaEdicion = $state(false);
+  let facturaEditando = $state<FacturaDocument | null>(null);
+  let guardandoFactura = $state(false);
+  let facturaFormRef = $state<FacturaForm | undefined>(undefined);
+
+  let toastVisible = $state(false);
+  let toastMensaje = $state('');
+  let toastFacturaId = $state('');
+  let toastSegundos = $state(0);
+  let toastInterval: ReturnType<typeof setInterval> | null = null;
 
   let puedeEditar = $derived($auth.usuario?.rol === 'admin' || $auth.usuario?.rol === 'editor');
 
@@ -244,6 +266,130 @@
     }
   }
 
+  function abrirNuevaFactura() {
+    modoFacturaEdicion = false;
+    facturaEditando = null;
+    modalFacturaAbierto = true;
+  }
+
+  async function abrirEditarFactura(fila: Record<string, unknown>) {
+    const id = String(fila.facturaId ?? '');
+    if (!id) return;
+    error = '';
+    try {
+      const res = await api<{ ok: boolean; data: { factura: FacturaDocument } }>(`/facturas/${id}`);
+      facturaEditando = res.data?.factura ?? null;
+      modoFacturaEdicion = true;
+      modalFacturaAbierto = true;
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'No se pudo cargar la factura';
+    }
+  }
+
+  function cerrarModalFactura() {
+    modalFacturaAbierto = false;
+    modoFacturaEdicion = false;
+    facturaEditando = null;
+  }
+
+  function mostrarToastGuardado(factura: FacturaDocument) {
+    toastMensaje = `✓ Factura ${factura.noFactura} guardada`;
+    toastFacturaId = factura._id;
+    toastVisible = true;
+    toastSegundos = 10;
+    if (toastInterval) clearInterval(toastInterval);
+    toastInterval = setInterval(() => {
+      toastSegundos -= 1;
+      if (toastSegundos <= 0) {
+        if (toastInterval) clearInterval(toastInterval);
+        toastVisible = false;
+      }
+    }, 1000);
+  }
+
+  async function deshacerUltimaFactura() {
+    if (!toastFacturaId) return;
+    try {
+      await api(`/facturas/${toastFacturaId}`, { method: 'DELETE' });
+      toastVisible = false;
+      if (toastInterval) clearInterval(toastInterval);
+      mensaje = 'Factura eliminada';
+      await cargarDatos(false);
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'No se pudo deshacer';
+    }
+  }
+
+  async function verDetallesToast() {
+    if (!toastFacturaId) return;
+    toastVisible = false;
+    if (toastInterval) clearInterval(toastInterval);
+    try {
+      const res = await api<{ ok: boolean; data: { factura: FacturaDocument } }>(
+        `/facturas/${toastFacturaId}`
+      );
+      facturaEditando = res.data?.factura ?? null;
+      modoFacturaEdicion = true;
+      modalFacturaAbierto = true;
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'No se pudo abrir la factura';
+    }
+  }
+
+  async function guardarFactura(datos: FacturaPayload, crearOtra: boolean) {
+    guardandoFactura = true;
+    error = '';
+    try {
+      if (modoFacturaEdicion && facturaEditando?._id) {
+        const res = await api<{ ok: boolean; data: { factura: FacturaDocument } }>(
+          `/facturas/${facturaEditando._id}`,
+          { method: 'PUT', body: JSON.stringify(datos) }
+        );
+        cerrarModalFactura();
+        mensaje = 'Factura actualizada';
+        if (res.data?.factura) mostrarToastGuardado(res.data.factura);
+      } else {
+        const res = await api<{ ok: boolean; data: { factura: FacturaDocument } }>('/facturas', {
+          method: 'POST',
+          body: JSON.stringify(datos),
+        });
+        limpiarBorradorFactura();
+        if (crearOtra) {
+          facturaFormRef?.limpiarParaNueva(datos.fechaFacturacion);
+          mensaje = `Factura ${datos.noFactura} guardada. Captura la siguiente.`;
+        } else {
+          cerrarModalFactura();
+        }
+        if (res.data?.factura) mostrarToastGuardado(res.data.factura);
+      }
+      await cargarDatos(false);
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'No se pudo guardar la factura';
+      throw err;
+    } finally {
+      guardandoFactura = false;
+    }
+  }
+
+  async function eliminarFactura(fila: Record<string, unknown>) {
+    const id = String(fila.facturaId ?? '');
+    if (!id) return;
+    if (
+      !confirm(
+        '¿Eliminar esta factura? Se ocultará del listado pero el registro permanecerá en la base de datos.'
+      )
+    ) {
+      return;
+    }
+    try {
+      await api(`/facturas/${id}`, { method: 'DELETE' });
+      mensaje = 'Factura eliminada';
+      await cargarDatos(false);
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'No se pudo eliminar la factura';
+    }
+  }
+
   function etiquetaClasificacion(fila: Record<string, unknown>): string {
     if (fila.excluidoDeTotales) return 'Cancelada';
     if (fila.estadoClasificacion === 'no_encontrado') return 'Sin clasificar';
@@ -282,6 +428,23 @@
   </div>
 {:else if resumen?.facturacion}
   <div class="modulo-contenido">
+    {#if puedeEditar}
+      <div class="panel-header-actions card">
+        <button type="button" class="btn btn-primary" onclick={abrirNuevaFactura}>
+          + Nueva factura
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary btn-sm"
+          disabled={reclasificando}
+          onclick={reclasificar}
+        >
+          {reclasificando ? 'Reclasificando...' : 'Reclasificar pendientes'}
+        </button>
+        <a href="/datos-excel" class="btn btn-secondary btn-sm">Datos Excel</a>
+      </div>
+    {/if}
+
     <div class="meta-info card">
       <p>
         <strong>{resumen.importacion.nombreArchivo}</strong> · {resumen.importacion.nombreHoja} ·
@@ -323,8 +486,12 @@
             <strong>Reclasificar pendientes</strong>.
           </li>
           <li>
-            <strong>Estatus de pago</strong> (Pagado / Pendiente): actualiza el Excel en
-            <a href="/datos-excel">Datos Excel</a> y vuelve a migrar.
+            <strong>Captura manual</strong>: usa <em>+ Nueva factura</em> para registrar ingresos sin Excel.
+            Edita o elimina desde la columna <em>Acciones</em> de cada fila.
+          </li>
+          <li>
+            <strong>Estatus de pago</strong> (Pagado / Pendiente): edítalo en el formulario de la factura
+            o actualiza el Excel en <a href="/datos-excel">Datos Excel</a> y vuelve a migrar.
           </li>
         </ul>
         {#if haySinClasificar}
@@ -358,18 +525,6 @@
     <section class="card filtros-panel">
       <div class="filtros-header">
         <h3>Filtros</h3>
-        <div class="filtros-acciones">
-          {#if puedeEditar}
-            <button
-              type="button"
-              class="btn btn-secondary btn-sm"
-              disabled={reclasificando}
-              onclick={reclasificar}
-            >
-              {reclasificando ? 'Reclasificando...' : 'Reclasificar pendientes'}
-            </button>
-          {/if}
-        </div>
       </div>
       {#if mensaje}
         <p class="mensaje-ok">{mensaje}</p>
@@ -525,6 +680,9 @@
               {#each columnasTabla() as columna}
                 <th>{columna}</th>
               {/each}
+              {#if puedeEditar}
+                <th class="col-acciones">Acciones</th>
+              {/if}
             </tr>
           </thead>
           <tbody>
@@ -565,6 +723,30 @@
                 {#each columnasTabla() as columna}
                   <td>{valorCelda(fila, columna)}</td>
                 {/each}
+                {#if puedeEditar}
+                  <td class="celda-acciones">
+                    {#if fila.facturaId}
+                      <button
+                        type="button"
+                        class="btn-icono"
+                        title="Editar factura"
+                        onclick={() => abrirEditarFactura(fila)}
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-icono btn-icono-peligro"
+                        title="Eliminar factura"
+                        onclick={() => eliminarFactura(fila)}
+                      >
+                        🗑️
+                      </button>
+                    {:else}
+                      —
+                    {/if}
+                  </td>
+                {/if}
               </tr>
             {/each}
           </tbody>
@@ -572,10 +754,51 @@
       </div>
     </section>
   </div>
+
+  <Modal
+    abierto={modalFacturaAbierto}
+    titulo={modoFacturaEdicion ? 'Editar factura' : 'Nueva factura'}
+    anchura="760px"
+    onCerrar={() => {
+      if (facturaFormRef) facturaFormRef.cancelarConConfirmacion();
+      else cerrarModalFactura();
+    }}
+  >
+    {#key `${modoFacturaEdicion}-${facturaEditando?._id ?? 'nueva'}`}
+      <FacturaForm
+        bind:this={facturaFormRef}
+        factura={facturaEditando}
+        modoEdicion={modoFacturaEdicion}
+        guardando={guardandoFactura}
+        onGuardar={guardarFactura}
+        onCancelar={cerrarModalFactura}
+      />
+    {/key}
+  </Modal>
+
+  <Toast
+    visible={toastVisible}
+    mensaje={toastMensaje}
+    deshacerSegundos={toastSegundos}
+    onCerrar={() => {
+      toastVisible = false;
+      if (toastInterval) clearInterval(toastInterval);
+    }}
+    onVerDetalles={verDetallesToast}
+    onDeshacer={deshacerUltimaFactura}
+  />
 {/if}
 
 <style>
   .modulo-contenido { display: flex; flex-direction: column; gap: 1.25rem; }
+  .panel-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.85rem 1rem;
+  }
+  .panel-header-actions .btn-sm { text-decoration: none; display: inline-flex; align-items: center; }
   .ayuda-editor { padding: 1rem 1.1rem; font-size: 0.875rem; }
   .ayuda-editor h3 { font-size: 0.9rem; margin-bottom: 0.5rem; }
   .ayuda-editor ul { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem; }
@@ -622,4 +845,16 @@
   .select-unidad:not(.select-editable) { appearance: none; border: none; background: transparent; color: inherit; pointer-events: none; padding-left: 0; }
   .select-unidad.select-editable { border: 1px solid var(--color-border); border-radius: 6px; background: white; cursor: pointer; }
   .select-unidad.select-editable:focus { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+  .col-acciones { width: 5rem; text-align: center; }
+  .celda-acciones { white-space: nowrap; text-align: center; }
+  .btn-icono {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0.15rem 0.35rem;
+    border-radius: 6px;
+  }
+  .btn-icono:hover { background: var(--color-bg); }
+  .btn-icono-peligro:hover { background: #fee2e2; }
 </style>

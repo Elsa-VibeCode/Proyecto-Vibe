@@ -3,15 +3,16 @@
     abierto: boolean;
     titulo: string;
     onCerrar: () => void;
+    anchura?: string;
     children?: import('svelte').Snippet;
   }
 
-  let { abierto, titulo, onCerrar, children }: Props = $props();
+  let { abierto, titulo, onCerrar, anchura = '480px', children }: Props = $props();
 </script>
 
 {#if abierto}
   <div class="overlay" onclick={onCerrar} role="presentation">
-    <div class="modal card" onclick={(e) => e.stopPropagation()} role="dialog">
+    <div class="modal card" style:max-width={anchura} onclick={(e) => e.stopPropagation()} role="dialog">
       <header>
         <h2>{titulo}</h2>
         <button class="cerrar" onclick={onCerrar} aria-label="Cerrar">✕</button>
@@ -37,9 +38,11 @@
 
   .modal {
     width: 100%;
-    max-width: 480px;
+    max-height: 92vh;
     padding: 0;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   header {
@@ -48,6 +51,7 @@
     justify-content: space-between;
     padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
   }
 
   header h2 {
@@ -68,5 +72,6 @@
 
   .contenido {
     padding: 1.5rem;
+    overflow-y: auto;
   }
 </style>
