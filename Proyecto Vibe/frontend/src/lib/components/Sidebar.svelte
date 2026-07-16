@@ -2,7 +2,7 @@
   import { page } from '$app/state';
   import { auth } from '$lib/auth';
   import { etiquetaRol } from '$lib/utils';
-  import { UserButton } from 'svelte-clerk';
+  import { UserButton, SignOutButton } from 'svelte-clerk/client';
 
   const enlaces = [
     { href: '/dashboard', label: 'Panel', icon: '📊' },
@@ -19,6 +19,7 @@
     { href: '/mapa', label: 'Mapa', icon: '🗺️' },
     { href: '/config/tipos-gasto', label: 'Tipos de gasto', icon: '⚙️' },
   ];
+
 </script>
 
 <aside class="sidebar">
@@ -48,7 +49,23 @@
         <strong>{$auth.usuario.nombre}</strong>
         <span>{etiquetaRol($auth.usuario.rol)}</span>
       </div>
-      <UserButton />
+      <div class="user-actions">
+        <UserButton />
+        <SignOutButton redirectUrl="/sign-in">
+          {#snippet children({ signOut })}
+            <button
+              type="button"
+              class="btn-logout"
+              onclick={() => {
+                auth.limpiar();
+                signOut();
+              }}
+            >
+              Cerrar sesión
+            </button>
+          {/snippet}
+        </SignOutButton>
+      </div>
     </div>
   {/if}
 </aside>
@@ -56,7 +73,7 @@
 <style>
   .sidebar {
     width: 260px;
-    min-height: 100vh;
+    height: 100vh;
     background: #0f172a;
     color: #e2e8f0;
     display: flex;
@@ -65,6 +82,7 @@
     position: fixed;
     left: 0;
     top: 0;
+    overflow: hidden;
   }
 
   .brand {
@@ -95,6 +113,10 @@
     flex-direction: column;
     gap: 0.35rem;
     flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin-right: -0.25rem;
+    padding-right: 0.25rem;
   }
 
   nav a {
@@ -117,7 +139,34 @@
   .user-panel {
     border-top: 1px solid #1e293b;
     padding-top: 1rem;
-    margin-top: 1rem;
+    margin-top: 0.75rem;
+    flex-shrink: 0;
+  }
+
+  .user-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0 0.25rem;
+  }
+
+  .btn-logout {
+    flex: 1;
+    padding: 0.45rem 0.65rem;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: transparent;
+    color: #e2e8f0;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+  }
+
+  .btn-logout:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: #f87171;
+    color: #fecaca;
   }
 
   .user-info {
