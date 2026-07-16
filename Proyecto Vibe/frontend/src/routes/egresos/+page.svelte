@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   import { api, apiSubirArchivo } from '$lib/api';
   import { formatearMoneda } from '$lib/utils';
   import EgresoForm from '$lib/components/EgresoForm.svelte';
@@ -62,6 +63,9 @@
   }
 
   onMount(async () => {
+    const mesUrl = $page.url.searchParams.get('mes');
+    if (mesUrl && /^\d{4}-\d{2}$/.test(mesUrl)) fMes = mesUrl;
+
     try {
       const tg = await api<{ tipos: TipoGasto[] }>('/tipos-gasto?activos=1');
       tiposGasto = tg.tipos;

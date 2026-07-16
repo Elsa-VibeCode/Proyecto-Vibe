@@ -27,6 +27,7 @@ import {
   listarImportaciones,
   parsearArchivoSicofi,
 } from '../services/sicofiImportService.js';
+import { invalidarPanelPorMes, invalidarPanelCompleto } from '../services/panel/invalidarPanel.js';
 
 const PREVIEW_LIMIT = 500;
 
@@ -137,6 +138,7 @@ router.post('/migrar', requiereRol('admin'), async (req, res) => {
   const dryRun = req.query.dryRun === '1' || req.body?.dryRun === true;
   const resumen = await migrarFacturasDesdeExcel({ dryRun });
   if (!resumen.ok) return fail(res, resumen.error, 404);
+  if (!dryRun) invalidarPanelCompleto();
   ok(res, resumen);
 });
 
@@ -147,6 +149,7 @@ router.patch('/:id/clasificar', requiereRol(...ROLES_EDICION), async (req, res) 
   try {
     const factura = await clasificarFactura(req.params.id, unidad);
     if (!factura) return fail(res, 'Factura no encontrada', 404);
+    invalidarPanelPorMes(factura.mes);
     ok(res, { factura });
   } catch (err) {
     fail(res, err instanceof Error ? err.message : 'No se pudo clasificar', 400);
@@ -195,6 +198,7 @@ router.post('/', requiereRol(...ROLES_EDICION), validaciones, async (req, res) =
       CAMPOS_CREACION(datos),
       req.usuario?._id
     );
+    invalidarPanelPorMes(factura.mes);
     ok(res, { factura }, 201);
   } catch (err) {
     fail(res, err instanceof Error ? err.message : 'No se pudo crear la factura', 400);
@@ -208,6 +212,7 @@ router.put('/:id', requiereRol(...ROLES_EDICION), validaciones, async (req, res)
   if (!factura) return fail(res, 'Factura no encontrada', 404);
 
   try {
+    const mesAnteriorFactura = factura.mes;
     if (req.body.noFactura && req.body.noFactura.trim() !== factura.noFactura) {
       const disponible = await folioDisponible(req.body.noFactura.trim(), factura._id);
       if (!disponible) return fail(res, 'Ya existe una factura con ese número', 409);
@@ -230,6 +235,7 @@ router.put('/:id', requiereRol(...ROLES_EDICION), validaciones, async (req, res)
     const cambios = diffFactura(antes, factura.toObject());
     await registrarHistorialFactura(factura._id, 'actualizar', cambios, req.usuario?._id);
 
+    invalidarPanelPorMes(factura.mes, mesAnteriorFactura);
     ok(res, { factura });
   } catch (err) {
     fail(res, err instanceof Error ? err.message : 'No se pudo actualizar la factura', 400);
@@ -247,6 +253,7 @@ router.delete('/:id', requiereRol(...ROLES_EDICION), async (req, res) => {
     req.usuario?._id
   );
 
+  invalidarPanelPorMes(factura.mes);
   ok(res, { mensaje: 'Factura eliminada correctamente', factura });
 });
 
@@ -331,6 +338,7 @@ router.post(
         csvTexto: parsed.texto,
       });
 
+      invalidarPanelCompleto();
       ok(res, resultado);
     } catch (err) {
       fail(res, err instanceof Error ? err.message : 'Error al importar CSV Sicofi', 400);
