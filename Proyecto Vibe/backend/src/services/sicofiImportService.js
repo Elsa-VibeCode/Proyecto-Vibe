@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { parse } from 'csv-parse/sync';
 import jschardet from 'jschardet';
 import iconv from 'iconv-lite';
+import * as XLSX from 'xlsx';
 import { Factura, esFechaFacturaValida, mesDesdeFecha } from '../models/Factura.js';
 import { ImportacionLog } from '../models/ImportacionLog.js';
 import {
@@ -130,7 +131,78 @@ export function parsearCsvTexto(texto) {
 export function parsearCsvBuffer(buffer) {
   const { text, encoding } = decodificarCsv(buffer);
   const parsed = parsearCsvTexto(text);
-  return { ...parsed, encoding, texto: text };
+  return { ...parsed, encoding, texto: text, formato: 'csv' };
+}
+
+function valorCeldaAString(valor) {
+  if (valor === null || valor === undefined) return '';
+  if (valor instanceof Date) {
+    if (Number.isNaN(valor.getTime())) return '';
+    return valor.toISOString().slice(0, 10);
+  }
+  return String(valor).trim();
+}
+
+function filasACsvTexto(filas, columnas) {
+  const esc = (v) => {
+    const s = String(v ?? '');
+    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+  const lineas = [columnas.map(esc).join(',')];
+  for (const fila of filas) {
+    lineas.push(columnas.map((col) => esc(fila[col])).join(','));
+  }
+  return lineas.join('\n');
+}
+
+export function esArchivoExcel(buffer, nombreArchivo = '') {
+  const nombre = String(nombreArchivo).toLowerCase();
+  if (nombre.endsWith('.xlsx') || nombre.endsWith('.xls')) return true;
+  if (buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b) return true;
+  if (buffer.length >= 8 && buffer[0] === 0xd0 && buffer[1] === 0xcf) return true;
+  return false;
+}
+
+export function parsearExcelSicofi(buffer) {
+  const libro = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  const hoja = libro.SheetNames[0];
+  if (!hoja) throw new Error('El archivo Excel no contiene hojas');
+
+  const raw = XLSX.utils.sheet_to_json(libro.Sheets[hoja], { defval: '' });
+  if (!raw.length) throw new Error('El archivo Excel no contiene filas de datos');
+
+  const filas = raw.map((fila) => {
+    const out = {};
+    for (const [clave, valor] of Object.entries(fila)) {
+      const col = String(clave).trim();
+      if (!col) continue;
+      out[col] = valorCeldaAString(valor);
+    }
+    return out;
+  });
+
+  const columnas = Object.keys(filas[0] ?? {});
+  if (columnas.length < 3) {
+    throw new Error('El Excel tiene muy pocas columnas; verifica que sea un export de Sicofi');
+  }
+
+  const texto = filasACsvTexto(filas, columnas);
+  return {
+    filas,
+    columnas,
+    delimitador: ',',
+    encoding: 'Excel (.xlsx/.xls)',
+    texto,
+    formato: 'excel',
+  };
+}
+
+export function parsearArchivoSicofi(buffer, nombreArchivo = '') {
+  if (esArchivoExcel(buffer, nombreArchivo)) {
+    return parsearExcelSicofi(buffer);
+  }
+  return parsearCsvBuffer(buffer);
 }
 
 function buscarColumna(columnas, aliases) {
@@ -414,8 +486,14 @@ function clasificarFilaPreview(doc, existente, mapUuid) {
   return { badge: 'NUEVA' };
 }
 
-export async function construirPreviewCompleto(buffer, mapping, defaults, limitePreview = PREVIEW_LIMIT) {
-  const parsed = parsearCsvBuffer(buffer);
+export async function construirPreviewCompleto(
+  buffer,
+  mapping,
+  defaults,
+  limitePreview = PREVIEW_LIMIT,
+  nombreArchivo = ''
+) {
+  const parsed = parsearArchivoSicofi(buffer, nombreArchivo);
   const { mapping: sugerido, camposSinMapping, defaultsSugeridos } = sugerirMapping(
     parsed.columnas
   );

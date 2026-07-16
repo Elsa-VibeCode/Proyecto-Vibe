@@ -502,7 +502,7 @@
           + Nueva factura
         </button>
         <button type="button" class="btn btn-secondary" onclick={() => (wizardSicofiAbierto = true)}>
-          Importar Sicofi CSV
+          Importar Sicofi
         </button>
         <a href="/facturacion/importaciones" class="btn btn-secondary btn-sm">Historial imports</a>
         <button

@@ -97,9 +97,17 @@
     const file = input.files?.[0];
     if (!file) return;
 
+    const nombre = file.name.toLowerCase();
+    const okExt = /\.(csv|txt|xlsx|xls)$/i.test(nombre);
+    if (!okExt) {
+      error = 'Formato no soportado. Sube un CSV o Excel (.csv, .xlsx, .xls) exportado desde Sicofi.';
+      input.value = '';
+      return;
+    }
+
     error = '';
     procesando = true;
-    progreso = 'Leyendo CSV...';
+    progreso = 'Leyendo archivo...';
     nombreArchivo = file.name;
 
     try {
@@ -172,6 +180,7 @@
         method: 'POST',
         body: JSON.stringify({
           csvBase64,
+          nombreArchivo,
           mapping,
           defaults,
           limitePreview,
@@ -253,7 +262,7 @@
   }
 </script>
 
-<Modal abierto={abierto} titulo="Importar Sicofi CSV" onCerrar={cerrar} anchura="920px">
+<Modal abierto={abierto} titulo="Importar desde Sicofi" onCerrar={cerrar} anchura="920px">
   <div class="wizard">
     <nav class="pasos" aria-label="Pasos del asistente">
       <span class:active={paso === 1} class:done={paso > 1}>1. Upload</span>
@@ -274,15 +283,20 @@
     {#if paso === 1}
       <section class="paso-contenido">
         <p class="ayuda">
-          Exporta CFDIs emitidos desde <strong>cfd.sicofi.com.mx</strong> en CSV y súbelo aquí.
-          Se detectan encoding y separador automáticamente.
+          Exporta CFDIs emitidos desde <strong>cfd.sicofi.com.mx</strong> en CSV o Excel y súbelo aquí.
+          Si Sicofi te da .xlsx, también funciona.
         </p>
         <label class="upload-zone">
-          <input type="file" accept=".csv,text/csv" onchange={subirCsv} disabled={procesando} />
+          <input
+            type="file"
+            accept=".csv,.txt,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onchange={subirCsv}
+            disabled={procesando}
+          />
           {#if nombreArchivo}
             <span class="archivo-nombre">{nombreArchivo} · {totalFilas} filas</span>
           {:else}
-            <span>Seleccionar archivo .csv</span>
+            <span>Seleccionar CSV o Excel (.csv, .xlsx, .xls)</span>
           {/if}
         </label>
 
