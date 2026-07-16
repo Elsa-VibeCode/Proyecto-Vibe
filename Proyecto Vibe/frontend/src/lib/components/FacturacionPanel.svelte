@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   import { auth } from '$lib/auth';
   import { api } from '$lib/api';
   import { formatearMoneda } from '$lib/excelFiltros';
@@ -217,6 +218,12 @@
 
   onMount(async () => {
     filtros = cargarFiltrosFacturacionGuardados();
+    const sp = $page.url.searchParams;
+    const mesUrl = sp.get('mesFacturacion');
+    const estatusUrl = sp.get('estatusPago');
+    if (mesUrl && /^\d{4}-\d{2}$/.test(mesUrl)) filtros.mesFacturacion = mesUrl;
+    if (estatusUrl) filtros.estatusPago = estatusUrl;
+    if (sp.get('sinClasificar') === 'true') filtros.estadoClasificacion = 'sin_clasificar';
     const mesesApi = await cargarMesesDisponibles();
     await cargarDatos(true, mesesApi);
   });

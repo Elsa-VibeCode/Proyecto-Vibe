@@ -16,6 +16,7 @@ import {
   parsearEgresosDesdeExcel,
   insertarEgresos,
 } from '../services/egresoService.js';
+import { invalidarPanelPorMes, invalidarPanelCompleto } from '../services/panel/invalidarPanel.js';
 
 const router = Router();
 
@@ -105,6 +106,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', validacionesEgreso, async (req, res) => {
   if (!revisarValidacion(req, res)) return;
   const egreso = await Egreso.create(req.body);
+  invalidarPanelPorMes(egreso.mes);
   res.status(201).json({ egreso });
 });
 
@@ -115,6 +117,7 @@ router.put('/:id', validacionesEgreso, async (req, res) => {
   const egreso = await Egreso.findById(req.params.id);
   if (!egreso) return res.status(404).json({ mensaje: 'Egreso no encontrado' });
 
+  const mesAnteriorEgreso = egreso.mes;
   const campos = [
     'fechaGasto',
     'proyecto',
@@ -134,6 +137,7 @@ router.put('/:id', validacionesEgreso, async (req, res) => {
   }
 
   await egreso.save(); // recalcula impuesto/total/mes/latam vía pre-validate
+  invalidarPanelPorMes(egreso.mes, mesAnteriorEgreso);
   res.json({ egreso });
 });
 
@@ -141,6 +145,7 @@ router.put('/:id', validacionesEgreso, async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const egreso = await Egreso.findByIdAndDelete(req.params.id);
   if (!egreso) return res.status(404).json({ mensaje: 'Egreso no encontrado' });
+  invalidarPanelPorMes(egreso.mes);
   res.json({ mensaje: 'Egreso eliminado correctamente' });
 });
 
@@ -165,6 +170,7 @@ router.post('/import', (req, res) => {
       });
       const { creados, fallidos } = await insertarEgresos(registros);
 
+      invalidarPanelCompleto();
       res.status(201).json({
         mensaje: `Importados ${creados} egresos desde la hoja "${hoja}".`,
         hoja,
