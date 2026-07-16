@@ -42,3 +42,16 @@ export function finMesUtc(mes) {
   const [y, m] = mes.split('-').map(Number);
   return new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
 }
+
+export function fechaMexico() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
+}
+
+export function diaDelMesMexico() {
+  return fechaMexico().getDate();
+}
+
+export function deltaPorcentual(actual, anterior) {
+  if (!anterior || anterior === 0) return null;
+  return redondear((actual - anterior) / anterior);
+}

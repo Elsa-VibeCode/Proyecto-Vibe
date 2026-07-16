@@ -18,6 +18,7 @@ import {
   mesesFacturacionDisponibles,
   mesesPagoDisponibles,
   FILTRO_ACTIVAS,
+  construirFiltroFacturas,
 } from '../services/facturaService.js';
 import {
   enriquecerFilasFacturacion,
@@ -121,7 +122,8 @@ async function construirResumen(importacion, filtros = {}, usuarioId = null) {
     const totalFacturas = await Factura.countDocuments(FILTRO_ACTIVAS);
     if (totalFacturas > 0) {
       const mapaUnidades = await obtenerMapaUnidades();
-      const facturas = await Factura.find(FILTRO_ACTIVAS).sort({ fechaFacturacion: -1 }).lean();
+      const filtroMongo = construirFiltroFacturas(filtros);
+      const facturas = await Factura.find(filtroMongo).sort({ fechaFacturacion: -1 }).lean();
       filasBase = facturasComoFilasExcel(facturas, mapeo, mapaUnidades);
       infoFacturacionClasificacion = resumenClasificacionDesdeFilas(filasBase, mapaUnidades);
     } else {

@@ -54,6 +54,8 @@
   let wizardSicofiAbierto = $state(false);
   let logImportErrores = $state<{ fila: number; mensaje: string }[]>([]);
   let modalLogImport = $state(false);
+  let modoVencidas = $state(false);
+  let modoPorVencer7d = $state(false);
 
   let puedeEditar = $derived($auth.usuario?.rol === 'admin' || $auth.usuario?.rol === 'editor');
 
@@ -188,6 +190,8 @@
     if (filtros.totalMax) params.set('totalMax', filtros.totalMax);
     if (filtros.soloSinClasificar) params.set('soloSinClasificar', filtros.soloSinClasificar);
     if (filtros.estadoClasificacion) params.set('estadoClasificacion', filtros.estadoClasificacion);
+    if (modoVencidas) params.set('vencidas', 'true');
+    if (modoPorVencer7d) params.set('porVencer7d', 'true');
 
     const query = params.toString();
     const endpoint = `/excel/ultima/facturacion${query ? `?${query}` : ''}`;
@@ -223,7 +227,12 @@
     const estatusUrl = sp.get('estatusPago');
     if (mesUrl && /^\d{4}-\d{2}$/.test(mesUrl)) filtros.mesFacturacion = mesUrl;
     if (estatusUrl) filtros.estatusPago = estatusUrl;
-    if (sp.get('sinClasificar') === 'true') filtros.estadoClasificacion = 'sin_clasificar';
+    if (sp.get('sinClasificar') === 'true') filtros.soloSinClasificar = 'true';
+    modoVencidas = sp.get('vencidas') === 'true';
+    modoPorVencer7d = sp.get('porVencer7d') === 'true';
+    if (modoVencidas || modoPorVencer7d) {
+      if (!filtros.estatusPago) filtros.estatusPago = 'PENDIENTE';
+    }
     const mesesApi = await cargarMesesDisponibles();
     await cargarDatos(true, mesesApi);
   });

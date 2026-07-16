@@ -1,3 +1,13 @@
+export type PanelVista = 'cobro' | 'facturacion';
+
+export interface PanelArrastres {
+  count: number;
+  monto: number;
+  mesOrigen: string;
+  folios: { folio: string; cliente: string; total: number; mesOrigen: string }[];
+  grupos?: { mesOrigen: string; count: number; monto: number; folios: PanelArrastres['folios'] }[];
+}
+
 export interface PanelConfig {
   aporteConsultingPct: number;
   fechaVigenciaRegla: string;
@@ -11,9 +21,11 @@ export interface PanelConsulting {
   pendiente: number;
   aporte10pct: number;
   numFacturas: number;
-  numPagadas: number;
-  numPendientes: number;
+  numPagadas?: number;
+  numPendientes?: number;
   pctPagado: number;
+  deltaFacturadoMesAnterior?: number | null;
+  arrastres?: PanelArrastres | null;
 }
 
 export interface PanelTechnologies {
@@ -25,7 +37,11 @@ export interface PanelTechnologies {
   recibe10pct: number;
   reservaAcumulada: number;
   numFacturas: number;
+  numPagadas?: number;
+  numPendientes?: number;
   pctPagado: number;
+  deltaFacturadoMesAnterior?: number | null;
+  arrastres?: PanelArrastres | null;
 }
 
 export interface PanelGrupo {
@@ -33,6 +49,7 @@ export interface PanelGrupo {
   recibio10pct: number;
   deficitMes: number;
   cobertura: { consulting: number; technologies: number };
+  deltaEgresosMesAnterior?: number | null;
 }
 
 export interface PanelAlerta {
@@ -76,6 +93,7 @@ export interface PanelRegla10 {
 
 export interface PanelData {
   mes: string;
+  vista: PanelVista;
   actualizadoEn: string;
   sinDatos: boolean;
   config: PanelConfig;
@@ -114,6 +132,18 @@ export function deltaPct(actual: number, anterior: number): number | null {
   return (actual - anterior) / anterior;
 }
 
+export function textoDelta(delta: number | null | undefined, esGasto = false): string {
+  if (delta === null || delta === undefined) return '';
+  const pct = Math.abs(delta * 100).toFixed(1);
+  const flecha = delta >= 0 ? '▲' : '▼';
+  return `${flecha} ${delta >= 0 ? '+' : '-'}${pct}% vs mes anterior`;
+}
+
+export function deltaEsPositivo(delta: number | null | undefined, esGasto = false): boolean {
+  if (delta === null || delta === undefined) return false;
+  return esGasto ? delta < 0 : delta >= 0;
+}
+
 /** Formato $1,234.56 para el Panel (2 decimales). */
 export function formatearMonedaPanel(valor: number): string {
   return new Intl.NumberFormat('es-MX', {
@@ -122,4 +152,30 @@ export function formatearMonedaPanel(valor: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(valor);
+}
+
+const STORAGE_VISTA = 'panel-vista';
+
+export function cargarVistaPanel(): PanelVista {
+  if (typeof localStorage === 'undefined') return 'cobro';
+  const v = localStorage.getItem(STORAGE_VISTA);
+  return v === 'facturacion' ? 'facturacion' : 'cobro';
+}
+
+export function guardarVistaPanel(vista: PanelVista) {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(STORAGE_VISTA, vista);
+}
+
+export function tooltipArrastres(arr: PanelArrastres | null | undefined): string {
+  if (!arr?.folios?.length) return '';
+  return arr.folios
+    .map((f) => `${f.folio} · ${f.cliente} · ${formatearMonedaPanel(f.total)} (emitida ${f.mesOrigen})`)
+    .join('\n');
+}
+
+export function etiquetaArrastres(arr: PanelArrastres | null | undefined): string {
+  if (!arr?.count) return '';
+  const mesLabel = arr.mesOrigen ? etiquetaMes(arr.mesOrigen) : 'meses previos';
+  return `↳ Incluye ${arr.count} arrastre${arr.count === 1 ? '' : 's'} de ${mesLabel} (${formatearMonedaPanel(arr.monto)})`;
 }
