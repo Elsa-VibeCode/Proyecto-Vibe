@@ -81,8 +81,25 @@ async function repararEgresosCorruptos() {
   return fixed;
 }
 
-async function sembrarEgresosJulio2026() {
-  const mes = '2026-07';
+function listarMeses(desde, hasta) {
+  const [y0, m0] = desde.split('-').map(Number);
+  const [y1, m1] = hasta.split('-').map(Number);
+  const meses = [];
+  let y = y0;
+  let m = m0;
+  while (y < y1 || (y === y1 && m <= m1)) {
+    meses.push(`${y}-${String(m).padStart(2, '0')}`);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return meses;
+}
+
+async function sembrarEgresosRecurrentesMes(mes) {
+  const [anio, mesNum] = mes.split('-').map(Number);
   const recurrentes = await EgresoRecurrente.find({ activo: true }).lean();
   let creados = 0;
   let omitidos = 0;
@@ -99,8 +116,8 @@ async function sembrarEgresosJulio2026() {
       continue;
     }
 
-    const dia = rec.diaEsperado ?? 15;
-    const fechaGasto = new Date(Date.UTC(2026, 6, dia, 12, 0, 0));
+    const dia = Math.min(rec.diaEsperado ?? 15, 28);
+    const fechaGasto = new Date(Date.UTC(anio, mesNum - 1, dia, 12, 0, 0));
     const subtotal = rec.montoReferencia ?? 0;
     const tipoImpuesto = subtotal > 0 && rec.tipoGasto.includes('IMPUESTOS') ? 'CERO' : 'IVA_16';
     const montos = calcularMontos({ subtotal, tipoImpuesto: tipoImpuesto === 'CERO' ? 'CERO' : 'IVA_16' });
@@ -115,7 +132,7 @@ async function sembrarEgresosJulio2026() {
       tipoGasto: rec.tipoGasto,
       tipoSubgasto: rec.proveedorEsperado,
       metodoPago: rec.tipoGasto === 'CREDITOS' ? 'DOMICILIACION' : 'TRANSFERENCIA',
-      noFactura: `${rec.proveedorEsperado.slice(0, 8).toUpperCase()}-202607`,
+      noFactura: `${rec.proveedorEsperado.slice(0, 8).toUpperCase()}-${mes.replace('-', '')}`,
       proveedor: rec.proveedorEsperado,
       concepto: rec.nombre,
       subtotal,
@@ -125,12 +142,24 @@ async function sembrarEgresosJulio2026() {
       esTransferLatam: /LATAM/i.test(rec.nombre),
     };
 
-    console.log(`  + Egreso julio: ${rec.nombre} → ${total.toFixed(2)}`);
+    console.log(`  + ${mes}: ${rec.nombre} → ${total.toFixed(2)}`);
     if (!dryRun) await Egreso.create(doc);
     creados += 1;
   }
 
   return { creados, omitidos };
+}
+
+async function sembrarEgresosRecurrentesRango(desde, hasta) {
+  const meses = listarMeses(desde, hasta);
+  let totalCreados = 0;
+  let totalOmitidos = 0;
+  for (const mes of meses) {
+    const { creados, omitidos } = await sembrarEgresosRecurrentesMes(mes);
+    totalCreados += creados;
+    totalOmitidos += omitidos;
+  }
+  return { creados: totalCreados, omitidos: totalOmitidos, meses: meses.length };
 }
 
 async function backfillFechaPago() {
@@ -230,9 +259,9 @@ async function main() {
   const egFixed = await repararEgresosCorruptos();
   console.log(`   ${egFixed} corregidos`);
 
-  console.log('\n2. Egresos recurrentes julio 2026');
-  const { creados, omitidos } = await sembrarEgresosJulio2026();
-  console.log(`   ${creados} creados, ${omitidos} ya existían`);
+  console.log('\n2. Egresos recurrentes (ene–jul 2026)');
+  const { creados, omitidos, meses } = await sembrarEgresosRecurrentesRango('2026-01', '2026-07');
+  console.log(`   ${creados} creados, ${omitidos} ya existían (${meses} meses)`);
 
   console.log('\n3. Backfill fechaPago (vista Cobro)');
   const facUpd = await backfillFechaPago();
@@ -242,11 +271,13 @@ async function main() {
 
   // Resumen
   const julEg = await Egreso.countDocuments({ mes: '2026-07' });
+  const junEg = await Egreso.countDocuments({ mes: '2026-06' });
   const { obtenerPanel } = await import('../src/services/panel/panelService.js');
   const panelCobro = await obtenerPanel('2026-07', { refrescar: true, vista: 'cobro' });
   const panelFact = await obtenerPanel('2026-07', { refrescar: true, vista: 'facturacion' });
 
   console.log('\n--- Resumen ---');
+  console.log(`Egresos junio 2026: ${junEg}`);
   console.log(`Egresos julio 2026: ${julEg}`);
   console.log(
     `Panel Cobro Consulting: ${panelCobro.unidades.consulting.facturado.toFixed(2)} (${panelCobro.unidades.consulting.numFacturas} facturas)`
