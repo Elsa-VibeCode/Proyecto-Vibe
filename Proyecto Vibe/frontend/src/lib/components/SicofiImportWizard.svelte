@@ -257,8 +257,10 @@
   }
 
   function conceptoResuelto(): boolean {
+    if (defaults.concepto === 'fijo' || defaults.concepto === 'folio') return true;
     if (mapping?.concepto) return true;
-    return defaults.concepto === 'fijo' || defaults.concepto === 'folio';
+    // Con folio mapeado, el backend usa «Factura {folio}» si la columna viene vacía
+    return Boolean(mapping?.folio);
   }
 
   let camposMappingFaltantes = $derived.by(() => {
@@ -422,9 +424,9 @@
           <label>
             <span class="label-text">concepto (si no hay columna)</span>
             <select bind:value={defaults.concepto}>
-              <option value="columna">Usar columna mapeada arriba</option>
+              <option value="columna">Usar columna mapeada (si vacía → Factura + folio)</option>
+              <option value="folio">Siempre «Factura» + folio</option>
               <option value="fijo">Texto fijo para todas las filas</option>
-              <option value="folio">Usar «Factura» + folio</option>
             </select>
           </label>
           {#if defaults.concepto === 'fijo'}

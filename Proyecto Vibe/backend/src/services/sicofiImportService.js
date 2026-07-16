@@ -276,7 +276,7 @@ export function sugerirMapping(columnas) {
     estatusPago: mapping.metodoPago ? 'metodo_pago' : 'PENDIENTE',
     rfcEmisor: mapping.rfcEmisorCol ? 'columna' : 'GBL',
     unidad: 'auto',
-    concepto: mapping.concepto ? 'columna' : 'fijo',
+    concepto: mapping.concepto ? 'columna' : 'folio',
     conceptoFijo: 'Servicios profesionales',
   };
 
@@ -487,8 +487,12 @@ export async function filaAModelo(fila, mapping, defaults, indiceMapa, filaNum) 
   const conceptoRaw = mapping.concepto ? String(valorColumna(fila, mapping.concepto)).trim() : '';
   let concepto = conceptoRaw;
   if (!concepto) {
-    if (defaults.concepto === 'folio') concepto = `Factura ${noFactura}`;
-    else if (defaults.concepto === 'fijo') concepto = String(defaults.conceptoFijo ?? 'Servicios profesionales').trim();
+    if (defaults.concepto === 'fijo') {
+      concepto = String(defaults.conceptoFijo ?? 'Servicios profesionales').trim();
+    } else if (defaults.concepto === 'folio' || defaults.concepto === 'columna' || !defaults.concepto) {
+      // Sicofi a menudo no trae concepto: usar folio antes de marcar error
+      if (noFactura) concepto = `Factura ${noFactura}`;
+    }
   }
   if (!concepto) errores.push('Falta concepto');
 
