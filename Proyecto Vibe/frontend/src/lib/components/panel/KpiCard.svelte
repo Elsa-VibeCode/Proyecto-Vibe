@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { formatearMoneda } from '$lib/excelFiltros';
-  import { pctTexto } from '$lib/types/panel';
+  import { formatearMonedaPanel, pctTexto } from '$lib/types/panel';
 
   interface Props {
     titulo: string;
@@ -46,9 +45,15 @@
       {/if}
     </header>
 
-    <div class="kpi-principal" title={kpiTooltip}>
-      {formatearMoneda(kpi)}
-    </div>
+    {#if enlace}
+      <a class="kpi-principal kpi-link" href={enlace} title={kpiTooltip}>
+        {formatearMonedaPanel(kpi)}
+      </a>
+    {:else}
+      <div class="kpi-principal" title={kpiTooltip}>
+        {formatearMonedaPanel(kpi)}
+      </div>
+    {/if}
 
     <ul class="submetricas">
       {#each submetricas as s}
@@ -118,6 +123,17 @@
     font-weight: 800;
     line-height: 1.1;
     cursor: help;
+  }
+
+  .kpi-link {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .kpi-link:hover {
+    color: var(--accent);
+    text-decoration: underline;
   }
 
   .submetricas {

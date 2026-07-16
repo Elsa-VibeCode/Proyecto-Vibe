@@ -1,8 +1,7 @@
 <script lang="ts">
   import Modal from '$lib/components/Modal.svelte';
-  import { formatearMoneda } from '$lib/excelFiltros';
   import type { PanelChartMes } from '$lib/types/panel';
-  import { etiquetaMes } from '$lib/types/panel';
+  import { etiquetaMes, formatearMonedaPanel } from '$lib/types/panel';
 
   interface Props {
     datos: PanelChartMes[];
@@ -42,7 +41,7 @@
         {#each datos as item}
           {@const ingresoTotal = item.consultingIngreso + item.techBBVA + item.techFuera}
           {@const alturaMax = Math.max(ingresoTotal, item.egresosTotal, 1)}
-          <div class="col" title="Consulting: {formatearMoneda(item.consultingIngreso)} · Tech BBVA: {formatearMoneda(item.techBBVA)} · Tech fuera: {formatearMoneda(item.techFuera)} · Egresos: {formatearMoneda(item.egresosTotal)}">
+          <div class="col" title="Consulting: {formatearMonedaPanel(item.consultingIngreso)} · Tech BBVA: {formatearMonedaPanel(item.techBBVA)} · Tech fuera: {formatearMonedaPanel(item.techFuera)} · Egresos: {formatearMonedaPanel(item.egresosTotal)}">
             <div class="bar-wrap">
               <div
                 class="stack ingresos"
@@ -58,7 +57,7 @@
               <div
                 class="linea-egresos"
                 style="bottom: {(item.egresosTotal / maxTotal) * 100}%"
-                title="Egresos {formatearMoneda(item.egresosTotal)}"
+                title="Egresos {formatearMonedaPanel(item.egresosTotal)}"
               ></div>
             </div>
             <span class="mes">{etiquetaMes(item.mes)}</span>
@@ -80,7 +79,7 @@
     <div class="barras barras-anual">
       {#each chartAnual as item}
         {@const ingresoTotal = item.consultingIngreso + item.techBBVA + item.techFuera}
-        <div class="col col-sm" title="{etiquetaMes(item.mes)}: {formatearMoneda(ingresoTotal)} ingresos · {formatearMoneda(item.egresosTotal)} egresos">
+        <div class="col col-sm" title="{etiquetaMes(item.mes)}: {formatearMonedaPanel(ingresoTotal)} ingresos · {formatearMonedaPanel(item.egresosTotal)} egresos">
           <div class="bar-wrap bar-sm">
             <div class="stack ingresos" style="height: {(ingresoTotal / maxTotal) * 100}%">
               <div class="seg consulting" style="flex: {item.consultingIngreso}"></div>

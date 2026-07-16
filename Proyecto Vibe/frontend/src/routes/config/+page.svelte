@@ -56,7 +56,7 @@
       <h1>Configuración</h1>
       <p>Reglas de negocio del Panel (aporte Consulting → Grupo)</p>
     </div>
-    <a href="/dashboard" class="btn btn-secondary">← Volver al Panel</a>
+    <a href="/panel" class="btn btn-secondary">← Volver al Panel</a>
   </header>
 
   {#if mensaje}

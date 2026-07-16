@@ -14,8 +14,8 @@
   {publishableKey}
   signInUrl="/sign-in"
   signUpUrl="/sign-up"
-  signInFallbackRedirectUrl="/dashboard"
-  signUpFallbackRedirectUrl="/dashboard"
+  signInFallbackRedirectUrl="/panel"
+  signUpFallbackRedirectUrl="/panel"
 >
   <AppShell>
     {@render children()}

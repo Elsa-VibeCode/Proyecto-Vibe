@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { formatearMoneda } from '$lib/excelFiltros';
   import type { PanelRegla10 } from '$lib/types/panel';
-  import { pctTexto } from '$lib/types/panel';
+  import { formatearMonedaPanel, pctTexto } from '$lib/types/panel';
 
   interface Props {
     regla: PanelRegla10 | null;
@@ -33,15 +32,15 @@
       <div class="calculo-grid">
         <div>
           <span class="lbl">Consulting pagado en el mes</span>
-          <strong>{formatearMoneda(regla.consultingPagado)}</strong>
+          <strong>{formatearMonedaPanel(regla.consultingPagado)}</strong>
         </div>
         <div>
           <span class="lbl">Aporte esperado (10%)</span>
-          <strong class="verde">{formatearMoneda(regla.aporteEsperado)}</strong>
+          <strong class="verde">{formatearMonedaPanel(regla.aporteEsperado)}</strong>
         </div>
         <div>
           <span class="lbl">Egresos Grupo del mes</span>
-          <strong class="rojo">{formatearMoneda(regla.egresosGrupo)}</strong>
+          <strong class="rojo">{formatearMonedaPanel(regla.egresosGrupo)}</strong>
         </div>
         <div>
           <span class="lbl">Cobertura del 10% sobre egresos</span>
@@ -49,7 +48,7 @@
         </div>
         <div class="full">
           <span class="lbl">Gap a cubrir por Technologies</span>
-          <strong class="azul">{formatearMoneda(regla.gapTechnologies)}</strong>
+          <strong class="azul">{formatearMonedaPanel(regla.gapTechnologies)}</strong>
         </div>
       </div>
 
@@ -69,7 +68,7 @@
         <div class="leyenda">
           <span><i class="dot verde"></i>10% Consulting</span>
           <span><i class="dot azul"></i>Gap Technologies</span>
-          <span><i class="dot rojo"></i>Egresos Grupo {formatearMoneda(regla.egresosGrupo)}</span>
+          <span><i class="dot rojo"></i>Egresos Grupo {formatearMonedaPanel(regla.egresosGrupo)}</span>
         </div>
       </div>
     {:else}
