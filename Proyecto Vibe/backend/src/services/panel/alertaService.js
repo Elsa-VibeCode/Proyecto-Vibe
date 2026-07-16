@@ -3,6 +3,7 @@ import { Egreso } from '../../models/Egreso.js';
 import { EgresoRecurrente } from '../../models/EgresoRecurrente.js';
 import { FILTRO_ACTIVAS } from '../facturaService.js';
 import { redondear, mesAnterior, mesActualSistema, diaDelMesMexico, fechaMexico } from './mesUtils.js';
+import { filtroFacturasPanel, normalizarVista } from './vistaUtils.js';
 
 function escaparRegex(texto) {
   return String(texto).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -192,15 +193,19 @@ export async function detectarNovamexArrastre(mes) {
   ];
 }
 
-export async function detectarSinClasificar(mes) {
+export async function detectarSinClasificar(mes, vista = 'cobro') {
+  const v = normalizarVista(vista);
   const count = await Factura.countDocuments({
-    ...FILTRO_ACTIVAS,
-    mes,
+    ...filtroFacturasPanel(mes, v),
     unidad: null,
-    estatusEnvio: { $ne: 'CANCELADA' },
   });
 
   if (!count) return [];
+
+  const enlace =
+    v === 'cobro'
+      ? `/facturacion?mesPago=${mes}&sinClasificar=true`
+      : `/facturacion?mesFacturacion=${mes}&sinClasificar=true`;
 
   return [
     {
@@ -208,18 +213,18 @@ export async function detectarSinClasificar(mes) {
       urgencia: 'baja',
       count,
       descripcion: `${count} factura${count === 1 ? '' : 's'} sin clasificar`,
-      enlace: `/facturacion?mesFacturacion=${mes}&sinClasificar=true`,
+      enlace,
     },
   ];
 }
 
-export async function detectarAlertas(mes) {
+export async function detectarAlertas(mes, vista = 'cobro') {
   const resultados = await Promise.all([
     detectarVencidas(),
     detectarPorVencer7Dias(),
     detectarEgresosRecurrentesFaltantes(mes),
     detectarNovamexArrastre(mes),
-    detectarSinClasificar(mes),
+    detectarSinClasificar(mes, vista),
   ]);
 
   const alertas = resultados.flat();

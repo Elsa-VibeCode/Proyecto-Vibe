@@ -1,18 +1,15 @@
 import { Factura } from '../../models/Factura.js';
 import { Egreso } from '../../models/Egreso.js';
-import { FILTRO_ACTIVAS } from '../facturaService.js';
 import { redondear, mesesAnteriores } from './mesUtils.js';
+import { normalizarVista, filtroFacturasPanel } from './vistaUtils.js';
 
-async function ingresosMes(mes) {
-  const facturas = await Factura.find({
-    ...FILTRO_ACTIVAS,
-    mes,
-    estatusEnvio: { $ne: 'CANCELADA' },
-    estatusPago: { $ne: 'CANCELADO' },
+async function ingresosMes(mes, vista) {
+  const match = {
+    ...filtroFacturasPanel(mes, vista),
     unidad: { $in: ['Consulting', 'Strategy', 'Technologies'] },
-  })
-    .select('unidad total rfcEmisor')
-    .lean();
+  };
+
+  const facturas = await Factura.find(match).select('unidad total rfcEmisor').lean();
 
   let consultingIngreso = 0;
   let techBBVA = 0;
@@ -43,12 +40,13 @@ async function egresosMes(mes) {
   return redondear(rows[0]?.suma ?? 0);
 }
 
-export async function datosMeses(mesFinal, cantidad) {
+export async function datosMeses(mesFinal, cantidad, vista = 'cobro') {
+  const v = normalizarVista(vista);
   const meses = mesesAnteriores(mesFinal, cantidad);
   const series = [];
 
   for (const mes of meses) {
-    const ingresos = await ingresosMes(mes);
+    const ingresos = await ingresosMes(mes, v);
     const egresosTotal = await egresosMes(mes);
     series.push({
       mes,
@@ -62,10 +60,10 @@ export async function datosMeses(mesFinal, cantidad) {
   return series;
 }
 
-export async function datos6Meses(mesFinal) {
-  return datosMeses(mesFinal, 6);
+export async function datos6Meses(mesFinal, vista = 'cobro') {
+  return datosMeses(mesFinal, 6, vista);
 }
 
-export async function datos12Meses(mesFinal) {
-  return datosMeses(mesFinal, 12);
+export async function datos12Meses(mesFinal, vista = 'cobro') {
+  return datosMeses(mesFinal, 12, vista);
 }

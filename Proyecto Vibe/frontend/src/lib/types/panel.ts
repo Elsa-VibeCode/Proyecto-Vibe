@@ -1,3 +1,13 @@
+export type PanelVista = 'cobro' | 'facturacion';
+
+export interface PanelArrastres {
+  count: number;
+  monto: number;
+  mesOrigen: string;
+  folios: { folio: string; cliente: string; total: number; mesOrigen: string }[];
+  grupos?: { mesOrigen: string; count: number; monto: number; folios: PanelArrastres['folios'] }[];
+}
+
 export interface PanelConfig {
   aporteConsultingPct: number;
   fechaVigenciaRegla: string;
@@ -15,6 +25,7 @@ export interface PanelConsulting {
   numPendientes?: number;
   pctPagado: number;
   deltaFacturadoMesAnterior?: number | null;
+  arrastres?: PanelArrastres | null;
 }
 
 export interface PanelTechnologies {
@@ -30,6 +41,7 @@ export interface PanelTechnologies {
   numPendientes?: number;
   pctPagado: number;
   deltaFacturadoMesAnterior?: number | null;
+  arrastres?: PanelArrastres | null;
 }
 
 export interface PanelGrupo {
@@ -81,6 +93,7 @@ export interface PanelRegla10 {
 
 export interface PanelData {
   mes: string;
+  vista: PanelVista;
   actualizadoEn: string;
   sinDatos: boolean;
   config: PanelConfig;
@@ -139,4 +152,30 @@ export function formatearMonedaPanel(valor: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(valor);
+}
+
+const STORAGE_VISTA = 'panel-vista';
+
+export function cargarVistaPanel(): PanelVista {
+  if (typeof localStorage === 'undefined') return 'cobro';
+  const v = localStorage.getItem(STORAGE_VISTA);
+  return v === 'facturacion' ? 'facturacion' : 'cobro';
+}
+
+export function guardarVistaPanel(vista: PanelVista) {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(STORAGE_VISTA, vista);
+}
+
+export function tooltipArrastres(arr: PanelArrastres | null | undefined): string {
+  if (!arr?.folios?.length) return '';
+  return arr.folios
+    .map((f) => `${f.folio} · ${f.cliente} · ${formatearMonedaPanel(f.total)} (emitida ${f.mesOrigen})`)
+    .join('\n');
+}
+
+export function etiquetaArrastres(arr: PanelArrastres | null | undefined): string {
+  if (!arr?.count) return '';
+  const mesLabel = arr.mesOrigen ? etiquetaMes(arr.mesOrigen) : 'meses previos';
+  return `↳ Incluye ${arr.count} arrastre${arr.count === 1 ? '' : 's'} de ${mesLabel} (${formatearMonedaPanel(arr.monto)})`;
 }

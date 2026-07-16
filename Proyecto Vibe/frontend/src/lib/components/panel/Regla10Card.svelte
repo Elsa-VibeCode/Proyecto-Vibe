@@ -1,13 +1,16 @@
 <script lang="ts">
-  import type { PanelRegla10 } from '$lib/types/panel';
+  import type { PanelRegla10, PanelVista } from '$lib/types/panel';
   import { formatearMonedaPanel, pctTexto } from '$lib/types/panel';
 
   interface Props {
     regla: PanelRegla10 | null;
+    vista?: PanelVista;
     cargando?: boolean;
   }
 
-  let { regla, cargando = false }: Props = $props();
+  let { regla, vista = 'cobro', cargando = false }: Props = $props();
+
+  let lblConsulting = $derived(vista === 'cobro' ? 'Consulting cobrado en el mes' : 'Consulting pagado en el mes');
 
   let maxBarra = $derived(
     regla ? Math.max(regla.egresosGrupo, regla.aporteEsperado + regla.gapTechnologies, 1) : 1
@@ -31,7 +34,7 @@
     {#if regla.reglaAplica}
       <div class="calculo-grid">
         <div>
-          <span class="lbl">Consulting pagado en el mes</span>
+          <span class="lbl">{lblConsulting}</span>
           <strong>{formatearMonedaPanel(regla.consultingPagado)}</strong>
         </div>
         <div>

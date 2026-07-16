@@ -1,16 +1,24 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
-  import { formatearMonedaPanel, pctTexto } from '$lib/types/panel';
+  import {
+    formatearMonedaPanel,
+    pctTexto,
+    cargarVistaPanel,
+    guardarVistaPanel,
+    type PanelData,
+    type PanelVista,
+  } from '$lib/types/panel';
   import KpiCard from '$lib/components/panel/KpiCard.svelte';
   import Regla10Card from '$lib/components/panel/Regla10Card.svelte';
   import AlertasList from '$lib/components/panel/AlertasList.svelte';
   import Chart6Meses from '$lib/components/panel/Chart6Meses.svelte';
   import MesSelector from '$lib/components/panel/MesSelector.svelte';
+  import VistaToggle from '$lib/components/panel/VistaToggle.svelte';
   import SaldosTable from '$lib/components/panel/SaldosTable.svelte';
-  import type { PanelData } from '$lib/types/panel';
 
   let mesActivo = $state('');
+  let vistaActiva = $state<PanelVista>('cobro');
   let comparar = $state(false);
   let panel = $state<PanelData | null>(null);
   let cargando = $state(true);
@@ -37,6 +45,11 @@
     return opts;
   });
 
+  let esCobro = $derived(vistaActiva === 'cobro');
+  let enlaceFacturas = $derived(
+    esCobro ? `/facturacion?mesPago=${mesActivo}` : `/facturacion?mesFacturacion=${mesActivo}`
+  );
+
   async function cargarPanel(refrescar = false) {
     if (!mesActivo) mesActivo = mesDefault;
     cargando = !panel;
@@ -44,8 +57,9 @@
     error = '';
 
     try {
-      const qs = refrescar ? '&refrescar=1' : '';
-      const data = await api<{ data: PanelData }>(`/panel?mes=${mesActivo}${qs}`);
+      const qs = new URLSearchParams({ mes: mesActivo, vista: vistaActiva });
+      if (refrescar) qs.set('refrescar', '1');
+      const data = await api<{ data: PanelData }>(`/panel?${qs.toString()}`);
       panel = data.data;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Error al cargar el panel';
@@ -58,6 +72,7 @@
 
   onMount(() => {
     mesActivo = mesDefault;
+    vistaActiva = cargarVistaPanel();
     cargarPanel();
   });
 
@@ -65,10 +80,11 @@
     cargarPanel();
   }
 
-  function onCompararChange() {
-    /* deltas vienen en el payload del panel; solo re-render */
+  function onVistaChange(v: PanelVista) {
+    vistaActiva = v;
+    guardarVistaPanel(v);
+    cargarPanel();
   }
-
 </script>
 
 <div class="panel-home">
@@ -80,8 +96,10 @@
     <div class="controles">
       <MesSelector bind:mesActivo={mesActivo} {opcionesMes} disabled={cargando && !panel} onchange={onMesChange} />
 
+      <VistaToggle bind:vista={vistaActiva} disabled={cargando && !panel} onchange={onVistaChange} />
+
       <label class="toggle-comp">
-        <input type="checkbox" bind:checked={comparar} onchange={onCompararChange} />
+        <input type="checkbox" bind:checked={comparar} />
         Comparar con mes anterior
       </label>
 
@@ -121,32 +139,36 @@
       titulo="Consulting"
       color="verde"
       kpi={panel?.unidades.consulting.facturado ?? 0}
-      kpiTooltip="Total facturado en el mes activo (mes de facturación)"
+      kpiEtiqueta={panel ? `${panel.unidades.consulting.numFacturas} facturas` : ''}
+      kpiTooltip={esCobro
+        ? 'Total cobrado en el mes (fecha de pago)'
+        : 'Total facturado en el mes (fecha de facturación)'}
+      arrastres={panel?.unidades.consulting.arrastres}
       submetricas={panel
         ? [
             {
               icono: '✓',
               label: 'Pagado',
               valor: formatearMonedaPanel(panel.unidades.consulting.pagado),
-              detalle: `${panel.unidades.consulting.numPagadas} facturas`,
+              detalle: `${panel.unidades.consulting.numPagadas ?? 0} facturas`,
             },
             {
               icono: '⏳',
               label: 'Pendiente',
               valor: formatearMonedaPanel(panel.unidades.consulting.pendiente),
-              detalle: `${panel.unidades.consulting.numPendientes} facturas`,
+              detalle: `${panel.unidades.consulting.numPendientes ?? 0} facturas`,
             },
             {
               icono: '📤',
               label: 'Aporte 10% al Grupo',
               valor: formatearMonedaPanel(panel.unidades.consulting.aporte10pct),
-              detalle: 'Sobre pagado en el mes',
+              detalle: esCobro ? 'Sobre cobrado en el mes' : 'Sobre pagado en el mes',
             },
           ]
         : []}
       pctProgreso={panel?.unidades.consulting.pctPagado}
-      enlace={`/facturacion?mesFacturacion=${mesActivo}`}
-      enlaceTexto="Ver facturas del mes →"
+      enlace={enlaceFacturas}
+      enlaceTexto={esCobro ? 'Ver cobros del mes →' : 'Ver facturas del mes →'}
       delta={comparar ? (panel?.unidades.consulting.deltaFacturadoMesAnterior ?? null) : null}
       cargando={cargando && !panel}
     />
@@ -155,24 +177,24 @@
       titulo="Technologies"
       color="azul"
       kpi={panel?.unidades.technologies.facturado ?? 0}
-      kpiTooltip="Total facturado Technologies (BBVA + fuera BBVA)"
+      kpiEtiqueta={panel ? `${panel.unidades.technologies.numFacturas} facturas` : ''}
+      kpiTooltip={esCobro
+        ? 'Total cobrado Technologies en el mes'
+        : 'Total facturado Technologies (BBVA + fuera BBVA)'}
+      arrastres={panel?.unidades.technologies.arrastres}
       submetricas={panel
         ? [
             {
               icono: '✓',
               label: 'Pagado',
               valor: formatearMonedaPanel(panel.unidades.technologies.pagado),
-              detalle: panel.unidades.technologies.numPagadas != null
-                ? `${panel.unidades.technologies.numPagadas} facturas`
-                : undefined,
+              detalle: `${panel.unidades.technologies.numPagadas ?? 0} facturas`,
             },
             {
               icono: '⏳',
               label: 'Pendiente',
               valor: formatearMonedaPanel(panel.unidades.technologies.pendiente),
-              detalle: panel.unidades.technologies.numPendientes != null
-                ? `${panel.unidades.technologies.numPendientes} facturas`
-                : undefined,
+              detalle: `${panel.unidades.technologies.numPendientes ?? 0} facturas`,
             },
             {
               icono: '💰',
@@ -186,8 +208,8 @@
             },
           ]
         : []}
-      enlace="/flujo"
-      enlaceTexto="Ver flujo Technologies →"
+      enlace={enlaceFacturas}
+      enlaceTexto={esCobro ? 'Ver cobros del mes →' : 'Ver flujo Technologies →'}
       delta={comparar ? (panel?.unidades.technologies.deltaFacturadoMesAnterior ?? null) : null}
       cargando={cargando && !panel}
     />
@@ -224,7 +246,7 @@
     />
   </div>
 
-  <Regla10Card regla={panel?.regla10 ?? null} cargando={cargando && !panel} />
+  <Regla10Card regla={panel?.regla10 ?? null} vista={vistaActiva} cargando={cargando && !panel} />
 
   <AlertasList alertas={panel?.alertas ?? []} cargando={cargando && !panel} />
 

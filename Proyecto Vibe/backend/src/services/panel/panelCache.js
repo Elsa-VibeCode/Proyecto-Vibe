@@ -1,27 +1,34 @@
+import { normalizarVista, VISTAS_PANEL } from './vistaUtils.js';
+
 const TTL_MS = 60_000;
 const cache = new Map();
 
-function clavePanel(mes) {
-  return `panel:${mes}`;
+function clavePanel(mes, vista) {
+  return `panel:${mes}:${normalizarVista(vista)}`;
 }
 
-export function obtenerCachePanel(mes) {
-  const entry = cache.get(clavePanel(mes));
+export function obtenerCachePanel(mes, vista = 'cobro') {
+  const entry = cache.get(clavePanel(mes, vista));
   if (!entry) return null;
   if (Date.now() - entry.ts > TTL_MS) {
-    cache.delete(clavePanel(mes));
+    cache.delete(clavePanel(mes, vista));
     return null;
   }
   return { ...entry.data, desdeCache: true };
 }
 
-export function guardarCachePanel(mes, data) {
-  cache.set(clavePanel(mes), { ts: Date.now(), data: { ...data, desdeCache: false } });
+export function guardarCachePanel(mes, vista, data) {
+  cache.set(clavePanel(mes, vista), {
+    ts: Date.now(),
+    data: { ...data, desdeCache: false },
+  });
 }
 
 export function invalidarCachePanel(mes) {
   if (mes) {
-    cache.delete(clavePanel(mes));
+    for (const vista of VISTAS_PANEL) {
+      cache.delete(clavePanel(mes, vista));
+    }
     return;
   }
   cache.clear();

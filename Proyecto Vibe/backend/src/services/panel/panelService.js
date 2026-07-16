@@ -2,6 +2,7 @@ import { obtenerConfig } from '../../models/Config.js';
 import {
   calcularTotalesPorUnidad as calcularFacturas,
   reservaAcumuladaTechnologies,
+  consultingBaseRegla10,
 } from './facturaPanelService.js';
 import {
   calcularTotalesPorUnidad as calcularEgresos,
@@ -20,6 +21,7 @@ import {
   mesAnterior,
   deltaPorcentual,
 } from './mesUtils.js';
+import { normalizarVista } from './vistaUtils.js';
 import { obtenerCachePanel, guardarCachePanel } from './panelCache.js';
 
 function formatearActualizadoEn() {
@@ -30,11 +32,43 @@ function formatearActualizadoEn() {
   });
 }
 
-export async function obtenerPanel(mesParam, { refrescar = false } = {}) {
+function mapUnidadConsulting(u, aporte10pct) {
+  return {
+    facturado: u.facturado,
+    pagado: u.pagado,
+    pendiente: u.pendiente,
+    aporte10pct,
+    numFacturas: u.numFacturas,
+    numPagadas: u.numPagadas,
+    numPendientes: u.numPendientes,
+    pctPagado: u.pctPagado,
+    arrastres: u.arrastres ?? null,
+  };
+}
+
+function mapUnidadTech(u, recibe10pct, reservaAcumulada) {
+  return {
+    facturado: u.facturado,
+    facturadoBBVA: u.facturadoBBVA,
+    facturadoFueraBBVA: u.facturadoFueraBBVA,
+    pagado: u.pagado,
+    pendiente: u.pendiente,
+    recibe10pct,
+    reservaAcumulada,
+    numFacturas: u.numFacturas,
+    numPagadas: u.numPagadas,
+    numPendientes: u.numPendientes,
+    pctPagado: u.pctPagado,
+    arrastres: u.arrastres ?? null,
+  };
+}
+
+export async function obtenerPanel(mesParam, { refrescar = false, vista: vistaParam = 'cobro' } = {}) {
   const mes = esMesValido(mesParam) ? mesParam : mesActualSistema();
+  const vista = normalizarVista(vistaParam);
 
   if (!refrescar) {
-    const cached = obtenerCachePanel(mes);
+    const cached = obtenerCachePanel(mes, vista);
     if (cached) return cached;
   }
 
@@ -47,16 +81,17 @@ export async function obtenerPanel(mesParam, { refrescar = false } = {}) {
   };
 
   const [facturas, egresos, egresosGrupo, reservaAcumulada] = await Promise.all([
-    calcularFacturas(mes),
+    calcularFacturas(mes, vista),
     calcularEgresos(mes),
     egresosGrupoMes(mes),
-    reservaAcumuladaTechnologies(mes),
+    reservaAcumuladaTechnologies(mes, vista),
   ]);
 
+  const consultingBase = consultingBaseRegla10(facturas, vista);
   const reglaDetalle = calcularReglaAporte({
     mes,
     config: configDoc,
-    consultingPagado: facturas.consulting.pagado,
+    consultingPagado: consultingBase,
     egresosGrupo,
   });
 
@@ -67,51 +102,34 @@ export async function obtenerPanel(mesParam, { refrescar = false } = {}) {
 
   const [alertas, chart6meses, chart12meses, saldos, saldosYtd, facturasPrev, egresosGrupoPrev] =
     await Promise.all([
-      detectarAlertas(mes),
-      datos6Meses(mes),
-      datos12Meses(mes),
-      evolucionMensual(mes, reglaDetalle),
-      evolucionYtd(mes, config.aporteConsultingPct, config.reglaAplica),
-      calcularFacturas(mesAnterior(mes)),
+      detectarAlertas(mes, vista),
+      datos6Meses(mes, vista),
+      datos12Meses(mes, vista),
+      evolucionMensual(mes, reglaDetalle, vista),
+      evolucionYtd(mes, config.aporteConsultingPct, config.reglaAplica, vista),
+      calcularFacturas(mesAnterior(mes), vista),
       egresosGrupoMes(mesAnterior(mes)),
     ]);
 
-  const sinDatos =
-    facturas.totalFacturas === 0 && egresos.count === 0;
+  const sinDatos = facturas.totalFacturas === 0 && egresos.count === 0;
 
   const payload = {
     mes,
+    vista,
     actualizadoEn: formatearActualizadoEn(),
     sinDatos,
     config,
     regla10: reglaDetalle,
     unidades: {
       consulting: {
-        facturado: facturas.consulting.facturado,
-        pagado: facturas.consulting.pagado,
-        pendiente: facturas.consulting.pendiente,
-        aporte10pct,
-        numFacturas: facturas.consulting.numFacturas,
-        numPagadas: facturas.consulting.numPagadas,
-        numPendientes: facturas.consulting.numPendientes,
-        pctPagado: facturas.consulting.pctPagado,
+        ...mapUnidadConsulting(facturas.consulting, aporte10pct),
         deltaFacturadoMesAnterior: deltaPorcentual(
           facturas.consulting.facturado,
           facturasPrev.consulting.facturado
         ),
       },
       technologies: {
-        facturado: facturas.technologies.facturado,
-        facturadoBBVA: facturas.technologies.facturadoBBVA,
-        facturadoFueraBBVA: facturas.technologies.facturadoFueraBBVA,
-        pagado: facturas.technologies.pagado,
-        pendiente: facturas.technologies.pendiente,
-        recibe10pct,
-        reservaAcumulada,
-        numFacturas: facturas.technologies.numFacturas,
-        numPagadas: facturas.technologies.numPagadas,
-        numPendientes: facturas.technologies.numPendientes,
-        pctPagado: facturas.technologies.pctPagado,
+        ...mapUnidadTech(facturas.technologies, recibe10pct, reservaAcumulada),
         deltaFacturadoMesAnterior: deltaPorcentual(
           facturas.technologies.facturado,
           facturasPrev.technologies.facturado
@@ -136,7 +154,7 @@ export async function obtenerPanel(mesParam, { refrescar = false } = {}) {
     desdeCache: false,
   };
 
-  guardarCachePanel(mes, payload);
+  guardarCachePanel(mes, vista, payload);
   return payload;
 }
 

@@ -1,67 +1,102 @@
 import { Factura } from '../../models/Factura.js';
 import { Egreso } from '../../models/Egreso.js';
 import { FILTRO_ACTIVAS } from '../facturaService.js';
-import { redondear, mesAnterior } from './mesUtils.js';
+import { redondear, finMesUtc, mesAnterior, inicioMesUtc } from './mesUtils.js';
+import { normalizarVista, filtroFacturasPanel, rangoMesUtc } from './vistaUtils.js';
 
-async function ingresosPagadosUnidad(unidad, hastaMes) {
-  const unidadFiltro =
-    unidad === 'consulting'
-      ? { $in: ['Consulting', 'Strategy'] }
-      : unidad === 'technologies'
-        ? 'Technologies'
-        : unidad === 'grupo'
-          ? 'Grupo'
-          : null;
-
-  if (!unidadFiltro) return 0;
-
-  const facturas = await Factura.find({
-    ...FILTRO_ACTIVAS,
-    mes: { $lte: hastaMes },
-    unidad: unidadFiltro,
-    estatusPago: 'PAGADO',
-    estatusEnvio: { $ne: 'CANCELADA' },
-  })
-    .select('total')
-    .lean();
-
-  return redondear(facturas.reduce((acc, f) => acc + (Number(f.total) || 0), 0));
+function unidadFiltro(unidad) {
+  if (unidad === 'consulting') return { $in: ['Consulting', 'Strategy'] };
+  if (unidad === 'technologies') return 'Technologies';
+  if (unidad === 'grupo') return 'Grupo';
+  return null;
 }
 
-async function egresosUnidad(unidad, hastaMes) {
-  const map = { consulting: 'Consulting', technologies: 'Technologies', grupo: 'Grupo' };
-  const u = map[unidad];
-  if (!u) return 0;
+async function ingresosUnidadMes(unidad, mes, vista) {
+  const uf = unidadFiltro(unidad);
+  if (!uf) return 0;
 
-  const rows = await Egreso.aggregate([
-    { $match: { mes: { $lte: hastaMes }, unidad: u } },
+  const match = { ...filtroFacturasPanel(mes, vista), unidad: uf };
+  const rows = await Factura.aggregate([
+    { $match: match },
     { $group: { _id: null, suma: { $sum: '$total' } } },
   ]);
   return redondear(rows[0]?.suma ?? 0);
 }
 
-async function saldoAcumuladoHasta(unidad, mesAnteriorAlPeriodo) {
-  const ingresos = await ingresosPagadosUnidad(unidad, mesAnteriorAlPeriodo);
-  const egresos = await egresosUnidad(unidad, mesAnteriorAlPeriodo);
+async function ingresosAcumuladosHasta(unidad, mesHasta, vista) {
+  const uf = unidadFiltro(unidad);
+  if (!uf) return 0;
+
+  const v = normalizarVista(vista);
+  let match;
+
+  if (v === 'cobro') {
+    match = {
+      ...FILTRO_ACTIVAS,
+      unidad: uf,
+      estatusEnvio: { $ne: 'CANCELADA' },
+      estatusPago: { $ne: 'CANCELADO' },
+      fechaPago: { $exists: true, $ne: null, $lte: finMesUtc(mesHasta) },
+    };
+  } else {
+    match = {
+      ...FILTRO_ACTIVAS,
+      unidad: uf,
+      mes: { $lte: mesHasta },
+      estatusEnvio: { $ne: 'CANCELADA' },
+      estatusPago: { $ne: 'CANCELADO' },
+    };
+  }
+
+  const rows = await Factura.aggregate([
+    { $match: match },
+    { $group: { _id: null, suma: { $sum: '$total' } } },
+  ]);
+  return redondear(rows[0]?.suma ?? 0);
+}
+
+async function egresosUnidadMes(unidad, mes) {
+  const map = { consulting: 'Consulting', technologies: 'Technologies', grupo: 'Grupo' };
+  const u = map[unidad];
+  if (!u) return 0;
+
+  const rows = await Egreso.aggregate([
+    { $match: { mes, unidad: u } },
+    { $group: { _id: null, suma: { $sum: '$total' } } },
+  ]);
+  return redondear(rows[0]?.suma ?? 0);
+}
+
+async function egresosUnidadAcumulado(unidad, mesHasta) {
+  const map = { consulting: 'Consulting', technologies: 'Technologies', grupo: 'Grupo' };
+  const u = map[unidad];
+  if (!u) return 0;
+
+  const rows = await Egreso.aggregate([
+    { $match: { mes: { $lte: mesHasta }, unidad: u } },
+    { $group: { _id: null, suma: { $sum: '$total' } } },
+  ]);
+  return redondear(rows[0]?.suma ?? 0);
+}
+
+async function saldoAcumuladoHasta(unidad, mesHasta, vista) {
+  const ingresos = await ingresosAcumuladosHasta(unidad, mesHasta, vista);
+  const egresos = await egresosUnidadAcumulado(unidad, mesHasta);
   return redondear(ingresos - egresos);
 }
 
-export async function evolucionMensual(mes, regla) {
-  const mesPrev = (() => {
-    const [y, m] = mes.split('-').map(Number);
-    const d = new Date(Date.UTC(y, m - 2, 1));
-    return d.toISOString().slice(0, 7);
-  })();
-
+export async function evolucionMensual(mes, regla, vista = 'cobro') {
+  const v = normalizarVista(vista);
+  const mesPrev = mesAnterior(mes);
   const aporte10 = regla.reglaAplica ? regla.aporteEsperado : 0;
 
-  const consultingIngresos = await ingresosPagadosUnidad('consulting', mes);
-  const techIngresos = await ingresosPagadosUnidad('technologies', mes);
-  const grupoIngresosDirectos = await ingresosPagadosUnidad('grupo', mes);
+  const consultingIngresos = await ingresosUnidadMes('consulting', mes, v);
+  const techIngresos = await ingresosUnidadMes('technologies', mes, v);
+  const grupoIngresosDirectos = await ingresosUnidadMes('grupo', mes, v);
 
-  const consultingEgresos = await egresosUnidad('consulting', mes);
-  const techEgresos = await egresosUnidad('technologies', mes);
-  const grupoEgresos = await egresosUnidad('grupo', mes);
+  const consultingEgresos = await egresosUnidadMes('consulting', mes);
+  const techEgresos = await egresosUnidadMes('technologies', mes);
+  const grupoEgresos = await egresosUnidadMes('grupo', mes);
 
   const latamRows = await Egreso.aggregate([
     { $match: { mes, unidad: 'Technologies', esTransferLatam: true } },
@@ -69,9 +104,9 @@ export async function evolucionMensual(mes, regla) {
   ]);
   const latamKonfio = redondear(latamRows[0]?.suma ?? 0);
 
-  const saldoInicialConsulting = await saldoAcumuladoHasta('consulting', mesPrev);
-  const saldoInicialTech = await saldoAcumuladoHasta('technologies', mesPrev);
-  const saldoInicialGrupo = await saldoAcumuladoHasta('grupo', mesPrev);
+  const saldoInicialConsulting = await saldoAcumuladoHasta('consulting', mesPrev, v);
+  const saldoInicialTech = await saldoAcumuladoHasta('technologies', mesPrev, v);
+  const saldoInicialGrupo = await saldoAcumuladoHasta('grupo', mesPrev, v);
 
   const movConsulting = redondear(-aporte10);
   const movTech = redondear(aporte10 + latamKonfio);
@@ -106,9 +141,7 @@ export async function evolucionMensual(mes, regla) {
       egresos: grupoEgresos,
       movInternos: 0,
       movInternosEtiqueta: '—',
-      saldoFinal: redondear(
-        saldoInicialGrupo + grupoIngresosDirectos + aporte10 - grupoEgresos
-      ),
+      saldoFinal: redondear(saldoInicialGrupo + grupoIngresosDirectos + aporte10 - grupoEgresos),
     },
   ];
 
@@ -130,28 +163,42 @@ export async function evolucionMensual(mes, regla) {
   return filas;
 }
 
-export async function evolucionYtd(mes, reglaAportePct, reglaAplicaFn) {
+export async function evolucionYtd(mes, reglaAportePct, reglaAplicaFn, vista = 'cobro') {
+  const v = normalizarVista(vista);
   const [y] = mes.split('-');
   const inicioAnio = `${y}-01`;
-  const rangoMes = { $gte: inicioAnio, $lte: mes };
 
-  async function sumFacturasPagadas(unidad) {
-    const unidadFiltro =
-      unidad === 'consulting'
-        ? { $in: ['Consulting', 'Strategy'] }
-        : unidad === 'technologies'
-          ? 'Technologies'
-          : 'Grupo';
-    const rows = await Factura.aggregate([
-      {
-        $match: {
-          ...FILTRO_ACTIVAS,
-          mes: rangoMes,
-          unidad: unidadFiltro,
-          estatusPago: 'PAGADO',
-          estatusEnvio: { $ne: 'CANCELADA' },
+  async function sumIngresosUnidad(unidad) {
+    const uf = unidadFiltro(unidad);
+    if (!uf) return 0;
+
+    let match;
+    if (v === 'cobro') {
+      const rango = rangoMesUtc(mes);
+      match = {
+        ...FILTRO_ACTIVAS,
+        unidad: uf,
+        estatusEnvio: { $ne: 'CANCELADA' },
+        estatusPago: { $ne: 'CANCELADO' },
+        fechaPago: {
+          $exists: true,
+          $ne: null,
+          $gte: inicioMesUtc(inicioAnio),
+          $lte: rango.$lte,
         },
-      },
+      };
+    } else {
+      match = {
+        ...FILTRO_ACTIVAS,
+        mes: { $gte: inicioAnio, $lte: mes },
+        unidad: uf,
+        estatusEnvio: { $ne: 'CANCELADA' },
+        estatusPago: { $ne: 'CANCELADO' },
+      };
+    }
+
+    const rows = await Factura.aggregate([
+      { $match: match },
       { $group: { _id: null, suma: { $sum: '$total' } } },
     ]);
     return redondear(rows[0]?.suma ?? 0);
@@ -160,26 +207,24 @@ export async function evolucionYtd(mes, reglaAportePct, reglaAplicaFn) {
   async function sumEgresos(unidad) {
     const map = { consulting: 'Consulting', technologies: 'Technologies', grupo: 'Grupo' };
     const rows = await Egreso.aggregate([
-      { $match: { mes: rangoMes, unidad: map[unidad] } },
+      { $match: { mes: { $gte: inicioAnio, $lte: mes }, unidad: map[unidad] } },
       { $group: { _id: null, suma: { $sum: '$total' } } },
     ]);
     return redondear(rows[0]?.suma ?? 0);
   }
 
-  const consultingIngresos = await sumFacturasPagadas('consulting');
-  const techIngresos = await sumFacturasPagadas('technologies');
-  const grupoIngresosDirectos = await sumFacturasPagadas('grupo');
+  const consultingIngresos = await sumIngresosUnidad('consulting');
+  const techIngresos = await sumIngresosUnidad('technologies');
+  const grupoIngresosDirectos = await sumIngresosUnidad('grupo');
 
   const consultingEgresos = await sumEgresos('consulting');
   const techEgresos = await sumEgresos('technologies');
   const grupoEgresos = await sumEgresos('grupo');
 
-  const aporte10Ytd = reglaAplicaFn
-    ? redondear(consultingIngresos * reglaAportePct)
-    : 0;
+  const aporte10Ytd = reglaAplicaFn ? redondear(consultingIngresos * reglaAportePct) : 0;
 
   const latamRows = await Egreso.aggregate([
-    { $match: { mes: rangoMes, unidad: 'Technologies', esTransferLatam: true } },
+    { $match: { mes: { $gte: inicioAnio, $lte: mes }, unidad: 'Technologies', esTransferLatam: true } },
     { $group: { _id: null, suma: { $sum: '$total' } } },
   ]);
   const latamKonfio = redondear(latamRows[0]?.suma ?? 0);

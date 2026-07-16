@@ -1,10 +1,12 @@
 <script lang="ts">
-  import { formatearMonedaPanel, pctTexto, textoDelta, deltaEsPositivo } from '$lib/types/panel';
+  import { formatearMonedaPanel, pctTexto, textoDelta, deltaEsPositivo, etiquetaArrastres, tooltipArrastres } from '$lib/types/panel';
+  import type { PanelArrastres } from '$lib/types/panel';
 
   interface Props {
     titulo: string;
     color: 'verde' | 'azul' | 'naranja';
     kpi: number;
+    kpiEtiqueta?: string;
     kpiTooltip?: string;
     submetricas: { icono: string; label: string; valor: string; detalle?: string }[];
     pctProgreso?: number;
@@ -12,6 +14,7 @@
     enlaceTexto?: string;
     delta?: number | null;
     deltaEsGasto?: boolean;
+    arrastres?: PanelArrastres | null;
     cargando?: boolean;
   }
 
@@ -19,6 +22,7 @@
     titulo,
     color,
     kpi,
+    kpiEtiqueta = '',
     kpiTooltip = '',
     submetricas,
     pctProgreso,
@@ -26,11 +30,14 @@
     enlaceTexto = 'Ver detalle →',
     delta = null,
     deltaEsGasto = false,
+    arrastres = null,
     cargando = false,
   }: Props = $props();
 
   let deltaTexto = $derived(textoDelta(delta, deltaEsGasto));
   let deltaBueno = $derived(deltaEsPositivo(delta, deltaEsGasto));
+  let lineaArrastres = $derived(etiquetaArrastres(arrastres));
+  let tipArrastres = $derived(tooltipArrastres(arrastres));
 </script>
 
 <article class="kpi-card card color-{color}" class:skeleton={cargando}>
@@ -57,6 +64,14 @@
 
     {#if deltaTexto}
       <p class="delta-line" class:good={deltaBueno} class:bad={!deltaBueno}>{deltaTexto}</p>
+    {/if}
+
+    {#if lineaArrastres}
+      <p class="arrastres-line" title={tipArrastres}>{lineaArrastres}</p>
+    {/if}
+
+    {#if kpiEtiqueta}
+      <p class="kpi-etiqueta">{kpiEtiqueta}</p>
     {/if}
 
     <ul class="submetricas">
@@ -132,6 +147,19 @@
   }
   .delta-line.good { color: #047857; }
   .delta-line.bad { color: #b91c1c; }
+
+  .arrastres-line {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin: -0.15rem 0 0;
+    cursor: help;
+  }
+
+  .kpi-etiqueta {
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    margin: -0.35rem 0 0;
+  }
 
   .submetricas {
     list-style: none;
