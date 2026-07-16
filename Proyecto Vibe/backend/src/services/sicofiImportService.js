@@ -390,15 +390,86 @@ async function resolverUnidad(cliente, defaults, indiceMapa) {
   return { unidad, clasificacionAuto: Boolean(clasificacionAuto) };
 }
 
+function esTipoComprobanteP(valor) {
+  const t = normalizarClave(valor);
+  if (!t) return false;
+  if (t === 'p') return true;
+  if (t.startsWith('p ') || t === 'p.') return true;
+  if (t.includes('complemento') && t.includes('pago')) return true;
+  if (t.includes('tipo p')) return true;
+  return false;
+}
+
+function textoIndicaComplementoPago(texto) {
+  const n = normalizarClave(texto);
+  if (!n) return false;
+  if (n.includes('complemento') && n.includes('pago')) return true;
+  if (n.includes('recepcion de pagos') || n.includes('recepción de pagos')) return true;
+  if (n.includes('pago') && (n.includes('cfdi') || n.includes('factura') || n.includes('parcialidad'))) return true;
+  if (/^pago(\s|$)/.test(n) || n === 'pago') return true;
+  return false;
+}
+
+function columnaEsDescriptiva(nombreCol) {
+  const n = normalizarClave(nombreCol);
+  return (
+    n.includes('concepto') ||
+    n.includes('descripcion') ||
+    n.includes('descripción') ||
+    n.includes('detalle') ||
+    n.includes('producto') ||
+    n.includes('observ')
+  );
+}
+
+function buscarTipoComprobanteEnFila(fila, mapping) {
+  if (mapping.tipoComprobante) {
+    return valorColumna(fila, mapping.tipoComprobante);
+  }
+  for (const col of Object.keys(fila)) {
+    const nk = normalizarClave(col);
+    if (nk === 'tipo' || nk === 'tipo de comprobante' || nk === 'tipo cfdi' || nk === 'tipo de cfdi') {
+      return valorColumna(fila, col);
+    }
+  }
+  return '';
+}
+
+function esComplementoPago(fila, mapping) {
+  const tipoVal = buscarTipoComprobanteEnFila(fila, mapping);
+  if (esTipoComprobanteP(tipoVal)) return true;
+
+  const subtotal = parsearNumeroCsv(valorColumna(fila, mapping.subtotal));
+  const total = parsearNumeroCsv(valorColumna(fila, mapping.total));
+  const montosCero =
+    (subtotal === null || subtotal === 0) && (total === null || total === 0);
+  if (!montosCero) return false;
+
+  if (mapping.concepto && textoIndicaComplementoPago(valorColumna(fila, mapping.concepto))) {
+    return true;
+  }
+
+  for (const [col, val] of Object.entries(fila)) {
+    if (columnaEsDescriptiva(col) && textoIndicaComplementoPago(String(val ?? ''))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function esTipoIngreso(fila, mapping) {
-  if (!mapping.tipoComprobante) return true;
-  const t = normalizarClave(valorColumna(fila, mapping.tipoComprobante));
-  if (!t) return true;
-  if (t === 'p' || t.includes('pago')) return false;
+  const tipoVal = buscarTipoComprobanteEnFila(fila, mapping);
+  if (!tipoVal) return true;
+  if (esTipoComprobanteP(tipoVal)) return false;
+  const t = normalizarClave(tipoVal);
   return t === 'i' || t.includes('ingreso') || t.includes('factura') || true;
 }
 
 export async function filaAModelo(fila, mapping, defaults, indiceMapa, filaNum) {
+  if (esComplementoPago(fila, mapping)) {
+    return { skip: true, motivo: 'Complemento de pago (tipo P / monto cero) omitido' };
+  }
   if (!esTipoIngreso(fila, mapping)) {
     return { skip: true, motivo: 'Complemento de pago (tipo P) omitido' };
   }
@@ -571,6 +642,13 @@ async function rebuildPreview(filas, mapping, defaults, indiceMapa, limite = PRE
     const resultado = await filaAModelo(filas[i], mapping, defaults, indiceMapa, filaNum);
     if (resultado.skip) {
       contadores.OMITIDA += 1;
+      preview.push({
+        fila: filaNum,
+        badge: 'OMITIDA',
+        mensaje: resultado.motivo ?? 'Fila omitida',
+        noFactura: construirNoFactura(filas[i], mapping) || '',
+        cliente: normalizarCliente(valorColumna(filas[i], mapping.cliente)),
+      });
       continue;
     }
     if (resultado.error) {

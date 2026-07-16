@@ -59,6 +59,7 @@
     DUPLICADO: '🟡 DUPLICADO',
     SIN_CLASIFICAR: '🟠 SIN CLASIFICAR',
     ERROR: '🔴 ERROR',
+    OMITIDA: '⚪ OMITIDA',
   };
 
   function resetWizard() {
@@ -248,7 +249,7 @@
   );
 
   let resumenContadores = $derived(
-    `${contadores.NUEVA ?? 0} nuevas · ${contadores.DUPLICADO ?? 0} duplicadas · ${contadores.SIN_CLASIFICAR ?? 0} sin clasificar · ${contadores.ERROR ?? 0} con errores`
+    `${contadores.NUEVA ?? 0} nuevas · ${contadores.DUPLICADO ?? 0} duplicadas · ${contadores.SIN_CLASIFICAR ?? 0} sin clasificar · ${contadores.ERROR ?? 0} con errores · ${contadores.OMITIDA ?? 0} omitidas`
   );
 
   function puedeContinuarPaso1(): boolean {
