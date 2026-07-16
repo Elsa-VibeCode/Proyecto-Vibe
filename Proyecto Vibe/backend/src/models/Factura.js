@@ -48,6 +48,7 @@ const facturaSchema = new mongoose.Schema(
     clasificacionAuto: { type: Boolean, default: false }, // true = vino del mapa
     // Marca las facturas creadas por la migración desde Excel (respaldo/trazabilidad).
     origen: { type: String, enum: ['excel-migracion', 'manual', 'sicofi'], default: 'manual' },
+    uuid: { type: String, trim: true, default: '', sparse: true },
     deletedAt: { type: Date, default: null, index: true },
   },
   { timestamps: true }
@@ -65,5 +66,10 @@ facturaSchema.pre('validate', function calcularMes() {
 });
 
 facturaSchema.index({ fechaPago: 1, estatusPago: 1 });
+
+facturaSchema.index(
+  { uuid: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null, uuid: { $type: 'string', $ne: '' } } }
+);
 
 export const Factura = mongoose.model('Factura', facturaSchema);

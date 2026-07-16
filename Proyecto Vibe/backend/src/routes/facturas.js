@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { body, validationResult } from 'express-validator';
 import { Factura } from '../models/Factura.js';
 import { protegerRuta, requiereRol } from '../middleware/auth.js';
@@ -20,10 +21,52 @@ import {
   diffFactura,
   FILTRO_ACTIVAS,
 } from '../services/facturaService.js';
+import {
+  construirPreviewCompleto,
+  importarSicofi,
+  listarImportaciones,
+  parsearArchivoSicofi,
+} from '../services/sicofiImportService.js';
+
+const PREVIEW_LIMIT = 500;
 
 const router = Router();
-
 const ROLES_EDICION = ['admin', 'editor'];
+
+const MIME_SICOFI = new Set([
+  'text/csv',
+  'application/csv',
+  'text/plain',
+  'application/octet-stream',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+
+function archivoSicofiPermitido(file) {
+  const nombre = String(file.originalname ?? '').toLowerCase();
+  if (/\.(csv|txt|xlsx|xls)$/i.test(nombre)) return true;
+  return MIME_SICOFI.has(file.mimetype);
+}
+
+const uploadSicofi = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    cb(
+      archivoSicofiPermitido(file)
+        ? null
+        : new Error('Formato no soportado. Usa CSV o Excel (.csv, .xlsx, .xls) exportado desde Sicofi'),
+      archivoSicofiPermitido(file)
+    );
+  },
+});
+
+function bufferDesdeBody(body) {
+  if (body?.csvBase64) {
+    return Buffer.from(String(body.csvBase64), 'base64');
+  }
+  return null;
+}
 
 const ok = (res, data, status = 200) => res.status(status).json({ ok: true, data });
 const fail = (res, error, status = 400) => res.status(status).json({ ok: false, error });
@@ -206,6 +249,94 @@ router.delete('/:id', requiereRol(...ROLES_EDICION), async (req, res) => {
 
   ok(res, { mensaje: 'Factura eliminada correctamente', factura });
 });
+
+router.get('/importaciones', requiereRol(...ROLES_EDICION), async (req, res) => {
+  const limite = Math.min(Number(req.query.limite) || 20, 100);
+  ok(res, { importaciones: await listarImportaciones(limite) });
+});
+
+router.post('/preview-sicofi', requiereRol(...ROLES_EDICION), (req, res) => {
+  uploadSicofi.single('archivo')(req, res, async (errMulter) => {
+    if (errMulter) {
+      const mensaje =
+        errMulter instanceof multer.MulterError
+          ? 'El archivo excede el tamaño máximo permitido (15 MB)'
+          : errMulter.message;
+      return fail(res, mensaje, 400);
+    }
+
+    try {
+      const buffer = req.file?.buffer ?? bufferDesdeBody(req.body);
+      if (!buffer?.length) return fail(res, 'Envía un archivo CSV/Excel o csvBase64');
+
+      let mapping;
+      let defaults;
+      if (req.body?.mapping) {
+        mapping = typeof req.body.mapping === 'string' ? JSON.parse(req.body.mapping) : req.body.mapping;
+      }
+      if (req.body?.defaults) {
+        defaults = typeof req.body.defaults === 'string' ? JSON.parse(req.body.defaults) : req.body.defaults;
+      }
+
+      const limiteRaw = req.body?.limitePreview;
+      const limitePreview =
+        limiteRaw === 'all' || limiteRaw === '0'
+          ? Number.MAX_SAFE_INTEGER
+          : limiteRaw
+            ? Number(limiteRaw)
+            : PREVIEW_LIMIT;
+
+      const nombreArchivo = req.file?.originalname ?? String(req.body?.nombreArchivo ?? '');
+      const preview = await construirPreviewCompleto(
+        buffer,
+        mapping,
+        defaults,
+        limitePreview,
+        nombreArchivo
+      );
+      ok(res, { ...preview, csvBase64: buffer.toString('base64'), nombreArchivo });
+    } catch (err) {
+      fail(res, err instanceof Error ? err.message : 'No se pudo previsualizar el archivo', 400);
+    }
+  });
+});
+
+router.post(
+  '/import-sicofi',
+  requiereRol(...ROLES_EDICION),
+  body('estrategiaDuplicados').optional().isIn(['ignorar', 'actualizarVacios', 'sobrescribir']),
+  async (req, res) => {
+    const erroresVal = validationResult(req);
+    if (!erroresVal.isEmpty()) return fail(res, erroresVal.array()[0]?.msg ?? 'Datos inválidos');
+
+    try {
+      const buffer = bufferDesdeBody(req.body);
+      if (!buffer?.length) return fail(res, 'csvBase64 es requerido');
+
+      const { mapping, defaults, estrategiaDuplicados = 'ignorar', nombreArchivo = '' } =
+        req.body ?? {};
+      if (!mapping || typeof mapping !== 'object') return fail(res, 'mapping es requerido');
+
+      const parsed = parsearArchivoSicofi(
+        buffer,
+        String(nombreArchivo || req.body?.nombreArchivo || 'sicofi.csv')
+      );
+      const resultado = await importarSicofi({
+        filas: parsed.filas,
+        mapping,
+        defaults: defaults ?? {},
+        estrategiaDuplicados,
+        usuarioId: req.clerkUserId ?? String(req.usuario?._id ?? ''),
+        nombreArchivo: String(nombreArchivo || req.body?.nombreArchivo || 'sicofi.csv'),
+        csvTexto: parsed.texto,
+      });
+
+      ok(res, resultado);
+    } catch (err) {
+      fail(res, err instanceof Error ? err.message : 'Error al importar CSV Sicofi', 400);
+    }
+  }
+);
 
 function CAMPOS_CREACION(datos) {
   return Object.entries(datos)
