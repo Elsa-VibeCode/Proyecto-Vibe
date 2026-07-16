@@ -50,7 +50,7 @@
     if (!publica && !signedIn) {
       goto('/sign-in');
     } else if (publica && signedIn && page.url.pathname === '/') {
-      goto('/dashboard');
+      goto('/panel');
     }
   });
 </script>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatearMoneda } from '$lib/excelFiltros';
+  import { formatearMonedaPanel } from '$lib/types/panel';
   import type { PanelSaldo } from '$lib/types/panel';
 
   interface Props {
@@ -46,16 +46,16 @@
           {#each saldos as fila}
             <tr class:total={fila.unidad === 'caja_bbva'}>
               <td>{fila.etiqueta}</td>
-              <td class="num">{formatearMoneda(fila.saldoInicial)}</td>
-              <td class="num">{formatearMoneda(fila.ingresos)}</td>
-              <td class="num">{formatearMoneda(fila.egresos)}</td>
+              <td class="num">{formatearMonedaPanel(fila.saldoInicial)}</td>
+              <td class="num">{formatearMonedaPanel(fila.ingresos)}</td>
+              <td class="num">{formatearMonedaPanel(fila.egresos)}</td>
               <td class="num mov" title={fila.movInternosEtiqueta}>
-                {fila.movInternos !== 0 ? formatearMoneda(fila.movInternos) : '—'}
+                {fila.movInternos !== 0 ? formatearMonedaPanel(fila.movInternos) : '—'}
                 {#if fila.movInternosEtiqueta && fila.movInternos !== 0}
                   <small>{fila.movInternosEtiqueta}</small>
                 {/if}
               </td>
-              <td class="num"><strong>{formatearMoneda(fila.saldoFinal)}</strong></td>
+              <td class="num"><strong>{formatearMonedaPanel(fila.saldoFinal)}</strong></td>
             </tr>
           {/each}
         </tbody>

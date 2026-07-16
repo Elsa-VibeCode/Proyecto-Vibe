@@ -1,14 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
-  import { formatearMoneda } from '$lib/excelFiltros';
+  import { formatearMonedaPanel, mesAnterior, pctTexto, deltaPct } from '$lib/types/panel';
   import KpiCard from '$lib/components/panel/KpiCard.svelte';
   import Regla10Card from '$lib/components/panel/Regla10Card.svelte';
   import AlertasList from '$lib/components/panel/AlertasList.svelte';
   import Chart6Meses from '$lib/components/panel/Chart6Meses.svelte';
   import SaldosTable from '$lib/components/panel/SaldosTable.svelte';
   import type { PanelData } from '$lib/types/panel';
-  import { mesAnterior, pctTexto, deltaPct } from '$lib/types/panel';
 
   let mesActivo = $state('');
   let comparar = $state(false);
@@ -150,19 +149,19 @@
             {
               icono: '✓',
               label: 'Pagado',
-              valor: formatearMoneda(panel.unidades.consulting.pagado),
+              valor: formatearMonedaPanel(panel.unidades.consulting.pagado),
               detalle: `${panel.unidades.consulting.numPagadas} facturas`,
             },
             {
               icono: '⏳',
               label: 'Pendiente',
-              valor: formatearMoneda(panel.unidades.consulting.pendiente),
+              valor: formatearMonedaPanel(panel.unidades.consulting.pendiente),
               detalle: `${panel.unidades.consulting.numPendientes} facturas`,
             },
             {
               icono: '📤',
               label: 'Aporte 10% al Grupo',
-              valor: formatearMoneda(panel.unidades.consulting.aporte10pct),
+              valor: formatearMonedaPanel(panel.unidades.consulting.aporte10pct),
               detalle: 'Sobre pagado en el mes',
             },
           ]
@@ -184,22 +183,22 @@
             {
               icono: '✓',
               label: 'Pagado',
-              valor: formatearMoneda(panel.unidades.technologies.pagado),
+              valor: formatearMonedaPanel(panel.unidades.technologies.pagado),
             },
             {
               icono: '⏳',
               label: 'Pendiente',
-              valor: formatearMoneda(panel.unidades.technologies.pendiente),
+              valor: formatearMonedaPanel(panel.unidades.technologies.pendiente),
             },
             {
               icono: '💰',
               label: 'Reserva acumulada',
-              valor: formatearMoneda(panel.unidades.technologies.reservaAcumulada),
+              valor: formatearMonedaPanel(panel.unidades.technologies.reservaAcumulada),
             },
             {
               icono: '📥',
               label: 'Recibe de Consulting (10%)',
-              valor: formatearMoneda(panel.unidades.technologies.recibe10pct),
+              valor: formatearMonedaPanel(panel.unidades.technologies.recibe10pct),
             },
           ]
         : []}
@@ -219,12 +218,12 @@
             {
               icono: '📥',
               label: 'Recibió 10% Consulting',
-              valor: formatearMoneda(panel.unidades.grupo.recibio10pct),
+              valor: formatearMonedaPanel(panel.unidades.grupo.recibio10pct),
             },
             {
               icono: '❌',
               label: 'Déficit del mes',
-              valor: formatearMoneda(panel.unidades.grupo.deficitMes),
+              valor: formatearMonedaPanel(panel.unidades.grupo.deficitMes),
             },
             {
               icono: '📊',

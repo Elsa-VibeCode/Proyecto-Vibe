@@ -5,7 +5,7 @@
   import { UserButton, SignOutButton } from 'svelte-clerk/client';
 
   const enlaces = [
-    { href: '/dashboard', label: 'Panel', icon: '📊' },
+    { href: '/panel', label: 'Panel', icon: '📊' },
     { href: '/facturacion', label: 'Facturación', icon: '🧾' },
     { href: '/egresos', label: 'Egresos', icon: '💸' },
     { href: '/clasificacion', label: 'Clasificación', icon: '🏷️' },

@@ -3,7 +3,7 @@
 </script>
 
 <div class="auth-page">
-  <SignIn routing="path" path="/sign-in" signUpUrl="/sign-up" fallbackRedirectUrl="/dashboard" />
+  <SignIn routing="path" path="/sign-in" signUpUrl="/sign-up" fallbackRedirectUrl="/panel" />
 </div>
 
 <style>

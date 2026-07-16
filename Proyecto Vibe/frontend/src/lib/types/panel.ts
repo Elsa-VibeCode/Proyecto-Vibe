@@ -113,3 +113,13 @@ export function deltaPct(actual: number, anterior: number): number | null {
   if (anterior === 0) return null;
   return (actual - anterior) / anterior;
 }
+
+/** Formato $1,234.56 para el Panel (2 decimales). */
+export function formatearMonedaPanel(valor: number): string {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(valor);
+}
