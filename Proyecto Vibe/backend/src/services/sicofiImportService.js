@@ -52,21 +52,34 @@ const ALIAS_COLUMNAS = {
   cliente: [
     'razon social receptor',
     'razón social receptor',
+    'razon social',
+    'razón social',
     'nombre receptor',
     'receptor',
     'cliente',
   ],
-  concepto: ['concepto principal', 'concepto', 'descripcion', 'descripción'],
+  concepto: [
+    'concepto principal',
+    'concepto',
+    'descripcion del concepto',
+    'descripción del concepto',
+    'descripcion',
+    'descripción',
+    'detalle',
+    'producto',
+  ],
   subtotal: ['subtotal'],
   iva: ['iva trasladado', 'iva', 'impuesto trasladado'],
   total: ['total'],
   metodoPago: ['metodo de pago', 'método de pago', 'forma de pago'],
   estatusSat: ['estatus sat', 'estado sat', 'estatus cfdi', 'estado cfdi'],
   uuid: ['uuid', 'folio fiscal'],
-  rfcEmisor: ['rfc emisor', 'rfc del emisor'],
-  rfcReceptor: ['rfc receptor'],
-  tipoComprobante: ['tipo de comprobante', 'tipo comprobante', 'tipo'],
+  rfcEmisor: ['rfc emisor', 'rfc del emisor', 'emisor rfc'],
+  rfcReceptor: ['rfc receptor', 'rfc cliente'],
+  tipoComprobante: ['tipo de comprobante', 'tipo comprobante', 'tipo cfdi', 'tipo de cfdi'],
 };
+
+const ALIAS_EXCLUIR_FUZZY = ['tipo de cambio', 'tipo cambio', 'moneda', 'tipo de relación'];
 
 function normalizarClave(texto) {
   return String(texto ?? '')
@@ -213,7 +226,12 @@ function buscarColumna(columnas, aliases) {
   }
   for (const col of columnas) {
     const n = normalizarClave(col);
+    if (ALIAS_EXCLUIR_FUZZY.some((ex) => n.includes(ex))) continue;
     for (const alias of aliases) {
+      if (alias.length < 5) {
+        if (n === alias) return col;
+        continue;
+      }
       if (n.includes(alias) || alias.includes(n)) return col;
     }
   }
@@ -258,6 +276,8 @@ export function sugerirMapping(columnas) {
     estatusPago: mapping.metodoPago ? 'metodo_pago' : 'PENDIENTE',
     rfcEmisor: mapping.rfcEmisorCol ? 'columna' : 'GBL',
     unidad: 'auto',
+    concepto: mapping.concepto ? 'columna' : 'fijo',
+    conceptoFijo: 'Servicios profesionales',
   };
 
   return { mapping, camposSinMapping, defaultsSugeridos };
@@ -393,7 +413,12 @@ export async function filaAModelo(fila, mapping, defaults, indiceMapa, filaNum) 
   const cliente = normalizarCliente(valorColumna(fila, mapping.cliente));
   if (!cliente) errores.push('Falta cliente');
 
-  const concepto = String(valorColumna(fila, mapping.concepto)).trim();
+  const conceptoRaw = mapping.concepto ? String(valorColumna(fila, mapping.concepto)).trim() : '';
+  let concepto = conceptoRaw;
+  if (!concepto) {
+    if (defaults.concepto === 'folio') concepto = `Factura ${noFactura}`;
+    else if (defaults.concepto === 'fijo') concepto = String(defaults.conceptoFijo ?? 'Servicios profesionales').trim();
+  }
   if (!concepto) errores.push('Falta concepto');
 
   const subtotal = parsearNumeroCsv(valorColumna(fila, mapping.subtotal));

@@ -25,6 +25,8 @@ export interface SicofiDefaults {
   estatusPago: 'PENDIENTE' | 'PAGADO' | 'metodo_pago';
   rfcEmisor: 'GBL' | 'GAVM' | 'columna' | string;
   unidad: 'auto' | 'vacia';
+  concepto?: 'columna' | 'fijo' | 'folio';
+  conceptoFijo?: string;
 }
 
 export interface SicofiPreviewFila {

@@ -42,6 +42,8 @@
     estatusPago: 'PENDIENTE',
     rfcEmisor: 'GBL',
     unidad: 'auto',
+    concepto: 'columna',
+    conceptoFijo: 'Servicios profesionales',
   });
   let previewFilas = $state<SicofiPreviewFila[]>([]);
   let contadores = $state<Record<string, number>>({});
@@ -76,6 +78,8 @@
       estatusPago: 'PENDIENTE',
       rfcEmisor: 'GBL',
       unidad: 'auto',
+      concepto: 'columna',
+      conceptoFijo: 'Servicios profesionales',
     };
     previewFilas = [];
     contadores = {};
@@ -251,12 +255,28 @@
     return Boolean(csvBase64 && columnas.length >= 3 && primeras5.length > 0 && !error);
   }
 
+  function conceptoResuelto(): boolean {
+    if (mapping?.concepto) return true;
+    return defaults.concepto === 'fijo' || defaults.concepto === 'folio';
+  }
+
+  let camposMappingFaltantes = $derived.by(() => {
+    if (!mapping) return [] as string[];
+    const faltan: string[] = [];
+    if (!mapping.fechaFacturacion) faltan.push('Fecha de facturación');
+    if (!mapping.folio) faltan.push('Folio');
+    if (!mapping.cliente) faltan.push('Cliente');
+    if (!conceptoResuelto()) faltan.push('Concepto (columna o valor por defecto)');
+    if (!mapping.subtotal) faltan.push('Subtotal');
+    return faltan;
+  });
+
   function puedeContinuarPaso2(): boolean {
     return Boolean(
       mapping?.fechaFacturacion &&
         mapping?.folio &&
         mapping?.cliente &&
-        mapping?.concepto &&
+        conceptoResuelto() &&
         mapping?.subtotal
     );
   }
@@ -336,9 +356,19 @@
           Confirma o ajusta el mapeo de columnas. Los valores de ejemplo provienen de la primera fila del CSV.
         </p>
 
+        {#if camposMappingFaltantes.length}
+          <div class="alert alert-warning">
+            <strong>Faltan campos obligatorios:</strong> {camposMappingFaltantes.join(' · ')}
+          </div>
+        {/if}
+
         <div class="mapping-grid">
           {#each CAMPOS_MAPPING_UI as campo}
-            <label>
+            {@const falta =
+              campo.requerido &&
+              ((campo.key === 'concepto' && !conceptoResuelto()) ||
+                (campo.key !== 'concepto' && !mapping[campo.key]))}
+            <label class:falta>
               <span class="label-text">
                 {campo.label}
                 {#if campo.requerido}<em>*</em>{/if}
@@ -388,6 +418,20 @@
               <option value="vacia">Dejar vacía</option>
             </select>
           </label>
+          <label>
+            <span class="label-text">concepto (si no hay columna)</span>
+            <select bind:value={defaults.concepto}>
+              <option value="columna">Usar columna mapeada arriba</option>
+              <option value="fijo">Texto fijo para todas las filas</option>
+              <option value="folio">Usar «Factura» + folio</option>
+            </select>
+          </label>
+          {#if defaults.concepto === 'fijo'}
+            <label>
+              <span class="label-text">Texto del concepto</span>
+              <input type="text" bind:value={defaults.conceptoFijo} placeholder="Servicios profesionales" />
+            </label>
+          {/if}
         </div>
       </section>
     {:else if paso === 3}
@@ -482,6 +526,7 @@
             type="button"
             class="btn btn-primary"
             disabled={!puedeContinuarPaso2() || procesando}
+            title={camposMappingFaltantes.length ? `Completa: ${camposMappingFaltantes.join(', ')}` : ''}
             onclick={() => cargarPreview(3, 'all')}
           >
             Ver preview
@@ -706,5 +751,26 @@
     padding: 0.6rem 0.75rem;
     border-radius: 6px;
     font-size: 0.88rem;
+  }
+
+  .alert-warning {
+    background: #fffbeb;
+    color: #92400e;
+    padding: 0.6rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.88rem;
+    margin-bottom: 0.75rem;
+  }
+
+  label.falta select {
+    border-color: #f87171;
+    background: #fef2f2;
+  }
+
+  .defaults-grid input[type='text'] {
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    font-size: 0.85rem;
   }
 </style>
