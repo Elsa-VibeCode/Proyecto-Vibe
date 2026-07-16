@@ -7,6 +7,8 @@
   import Modal from '$lib/components/Modal.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import FacturaForm from '$lib/components/FacturaForm.svelte';
+  import SicofiImportWizard from '$lib/components/SicofiImportWizard.svelte';
+  import type { SicofiImportResponse } from '$lib/types/sicofi';
   import type {
     FacturaDocument,
     FacturaPayload,
@@ -47,6 +49,10 @@
   let toastFacturaId = $state('');
   let toastSegundos = $state(0);
   let toastInterval: ReturnType<typeof setInterval> | null = null;
+
+  let wizardSicofiAbierto = $state(false);
+  let logImportErrores = $state<{ fila: number; mensaje: string }[]>([]);
+  let modalLogImport = $state(false);
 
   let puedeEditar = $derived($auth.usuario?.rol === 'admin' || $auth.usuario?.rol === 'editor');
 
@@ -398,6 +404,41 @@
     }
   }
 
+  async function onImportSicofiCompleto(resumenImport: SicofiImportResponse['data']) {
+    logImportErrores = resumenImport.errores ?? [];
+    const lineas = [`✓ ${resumenImport.creadas} facturas creadas`];
+    if (resumenImport.actualizadas) lineas.push(`⚡ ${resumenImport.actualizadas} duplicadas actualizadas`);
+    if (resumenImport.ignoradas) lineas.push(`⚡ ${resumenImport.ignoradas} duplicadas ignoradas`);
+    if (resumenImport.sinClasificar) {
+      lineas.push(`⚠ ${resumenImport.sinClasificar} sin clasificar`);
+      mensaje = `${resumenImport.sinClasificar} facturas sin clasificar — usa el filtro "Sin clasificar" abajo.`;
+    } else {
+      mensaje = 'Importación Sicofi completada';
+    }
+    if (resumenImport.errores?.length) lineas.push(`✖ ${resumenImport.errores.length} excluidas por errores`);
+    toastMensaje = lineas.join(' · ');
+    toastFacturaId = '';
+    toastVisible = true;
+    toastSegundos = 0;
+    const mesesApi = await cargarMesesDisponibles();
+    await cargarDatos(true, mesesApi);
+  }
+
+  function filtrarSinClasificar() {
+    filtros = {
+      ...filtros,
+      estadoClasificacion: 'no_encontrado',
+      soloSinClasificar: '1',
+    };
+    guardarFiltrosFacturacion(filtros);
+    cargarDatos(false);
+  }
+
+  function verLogImportErrores() {
+    modalLogImport = true;
+    toastVisible = false;
+  }
+
   async function eliminarFactura(fila: Record<string, unknown>) {
     const id = String(fila.facturaId ?? '');
     if (!id) return;
@@ -460,6 +501,10 @@
         <button type="button" class="btn btn-primary" onclick={abrirNuevaFactura}>
           + Nueva factura
         </button>
+        <button type="button" class="btn btn-secondary" onclick={() => (wizardSicofiAbierto = true)}>
+          Importar Sicofi CSV
+        </button>
+        <a href="/facturacion/importaciones" class="btn btn-secondary btn-sm">Historial imports</a>
         <button
           type="button"
           class="btn btn-secondary btn-sm"
@@ -820,6 +865,24 @@
     {/key}
   </Modal>
 
+  <SicofiImportWizard
+    abierto={wizardSicofiAbierto}
+    onCerrar={() => (wizardSicofiAbierto = false)}
+    onCompletado={onImportSicofiCompleto}
+  />
+
+  <Modal abierto={modalLogImport} titulo="Errores de importación" onCerrar={() => (modalLogImport = false)}>
+    {#if logImportErrores.length === 0}
+      <p>Sin errores registrados.</p>
+    {:else}
+      <ul class="log-errores">
+        {#each logImportErrores as err}
+          <li>Fila {err.fila}: {err.mensaje}</li>
+        {/each}
+      </ul>
+    {/if}
+  </Modal>
+
   <Toast
     visible={toastVisible}
     mensaje={toastMensaje}
@@ -828,8 +891,8 @@
       toastVisible = false;
       if (toastInterval) clearInterval(toastInterval);
     }}
-    onVerDetalles={verDetallesToast}
-    onDeshacer={deshacerUltimaFactura}
+    onVerDetalles={logImportErrores.length ? verLogImportErrores : toastFacturaId ? verDetallesToast : undefined}
+    onDeshacer={toastFacturaId ? deshacerUltimaFactura : undefined}
   />
 {/if}
 
@@ -910,4 +973,6 @@
   }
   .btn-icono:hover { background: var(--color-bg); }
   .btn-icono-peligro:hover { background: #fee2e2; }
+  .log-errores { margin: 0; padding-left: 1.2rem; font-size: 0.85rem; max-height: 320px; overflow: auto; }
+  .log-errores li { margin-bottom: 0.35rem; }
 </style>

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { body, validationResult } from 'express-validator';
 import { Factura } from '../models/Factura.js';
 import { protegerRuta, requiereRol } from '../middleware/auth.js';
@@ -20,10 +21,36 @@ import {
   diffFactura,
   FILTRO_ACTIVAS,
 } from '../services/facturaService.js';
+import {
+  construirPreviewCompleto,
+  importarSicofi,
+  listarImportaciones,
+  parsearCsvBuffer,
+} from '../services/sicofiImportService.js';
+
+const PREVIEW_LIMIT = 500;
 
 const router = Router();
-
 const ROLES_EDICION = ['admin', 'editor'];
+
+const uploadCsv = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok =
+      file.mimetype === 'text/csv' ||
+      file.mimetype === 'application/vnd.ms-excel' ||
+      file.originalname.toLowerCase().endsWith('.csv');
+    cb(ok ? null : new Error('Solo se aceptan archivos .csv'), ok);
+  },
+});
+
+function bufferDesdeBody(body) {
+  if (body?.csvBase64) {
+    return Buffer.from(String(body.csvBase64), 'base64');
+  }
+  return null;
+}
 
 const ok = (res, data, status = 200) => res.status(status).json({ ok: true, data });
 const fail = (res, error, status = 400) => res.status(status).json({ ok: false, error });
@@ -206,6 +233,79 @@ router.delete('/:id', requiereRol(...ROLES_EDICION), async (req, res) => {
 
   ok(res, { mensaje: 'Factura eliminada correctamente', factura });
 });
+
+router.get('/importaciones', requiereRol(...ROLES_EDICION), async (req, res) => {
+  const limite = Math.min(Number(req.query.limite) || 20, 100);
+  ok(res, { importaciones: await listarImportaciones(limite) });
+});
+
+router.post(
+  '/preview-sicofi',
+  requiereRol(...ROLES_EDICION),
+  uploadCsv.single('archivo'),
+  async (req, res) => {
+    try {
+      const buffer = req.file?.buffer ?? bufferDesdeBody(req.body);
+      if (!buffer?.length) return fail(res, 'Envía un archivo CSV o csvBase64');
+
+      let mapping;
+      let defaults;
+      if (req.body?.mapping) {
+        mapping = typeof req.body.mapping === 'string' ? JSON.parse(req.body.mapping) : req.body.mapping;
+      }
+      if (req.body?.defaults) {
+        defaults = typeof req.body.defaults === 'string' ? JSON.parse(req.body.defaults) : req.body.defaults;
+      }
+
+      const limiteRaw = req.body?.limitePreview;
+      const limitePreview =
+        limiteRaw === 'all' || limiteRaw === '0'
+          ? Number.MAX_SAFE_INTEGER
+          : limiteRaw
+            ? Number(limiteRaw)
+            : PREVIEW_LIMIT;
+
+      const preview = await construirPreviewCompleto(buffer, mapping, defaults, limitePreview);
+      ok(res, { ...preview, csvBase64: buffer.toString('base64') });
+    } catch (err) {
+      fail(res, err instanceof Error ? err.message : 'No se pudo previsualizar el CSV', 400);
+    }
+  }
+);
+
+router.post(
+  '/import-sicofi',
+  requiereRol(...ROLES_EDICION),
+  body('estrategiaDuplicados').optional().isIn(['ignorar', 'actualizarVacios', 'sobrescribir']),
+  async (req, res) => {
+    const erroresVal = validationResult(req);
+    if (!erroresVal.isEmpty()) return fail(res, erroresVal.array()[0]?.msg ?? 'Datos inválidos');
+
+    try {
+      const buffer = bufferDesdeBody(req.body);
+      if (!buffer?.length) return fail(res, 'csvBase64 es requerido');
+
+      const { mapping, defaults, estrategiaDuplicados = 'ignorar', nombreArchivo = '' } =
+        req.body ?? {};
+      if (!mapping || typeof mapping !== 'object') return fail(res, 'mapping es requerido');
+
+      const parsed = parsearCsvBuffer(buffer);
+      const resultado = await importarSicofi({
+        filas: parsed.filas,
+        mapping,
+        defaults: defaults ?? {},
+        estrategiaDuplicados,
+        usuarioId: req.clerkUserId ?? String(req.usuario?._id ?? ''),
+        nombreArchivo: String(nombreArchivo || req.body?.nombreArchivo || 'sicofi.csv'),
+        csvTexto: parsed.texto,
+      });
+
+      ok(res, resultado);
+    } catch (err) {
+      fail(res, err instanceof Error ? err.message : 'Error al importar CSV Sicofi', 400);
+    }
+  }
+);
 
 function CAMPOS_CREACION(datos) {
   return Object.entries(datos)

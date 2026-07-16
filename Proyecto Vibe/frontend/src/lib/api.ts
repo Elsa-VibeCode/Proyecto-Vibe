@@ -147,7 +147,10 @@ export async function apiSubirArchivo<T>(
   const datos = await respuesta.json().catch(() => ({}));
 
   if (!respuesta.ok) {
-    throw new Error(datos.mensaje || 'Error al subir el archivo');
+    const mensaje =
+      (datos as { mensaje?: string; error?: string })?.mensaje ??
+      (datos as { error?: string })?.error;
+    throw new Error(mensaje || 'Error al subir el archivo');
   }
 
   return datos as T;
