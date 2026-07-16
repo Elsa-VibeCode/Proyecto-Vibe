@@ -106,9 +106,18 @@ function aNumero(valor) {
 function aFecha(valor) {
   if (valor instanceof Date) return valor;
   if (typeof valor === 'number') {
-    // Fecha serial de Excel.
-    const parsed = XLSX.SSF?.parse_date_code?.(valor);
-    if (parsed) return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
+    // Fecha serial de Excel (días desde 1899-12-30).
+    if (valor > 1000) {
+      const parsed = XLSX.SSF?.parse_date_code?.(valor);
+      if (parsed) return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
+    }
+    // Evitar tratar números pequeños como ms epoch.
+    if (valor < 1000) return null;
+  }
+  const texto = String(valor ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    const [y, m, d] = texto.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
   }
   const d = new Date(valor);
   return Number.isNaN(d.getTime()) ? null : d;
