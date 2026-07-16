@@ -12,7 +12,8 @@
     "seed:colaboradores": "node --env-file=.env src/seedColaboradores.js",
     "users:promote": "node --env-file=.env src/scripts/promoteUser.js",
     "migrate:facturas": "node --env-file=.env scripts/migrate-facturas-from-excel.js",
-    "seed:egresos-recurrentes": "node --env-file=.env scripts/seed-egresos-recurrentes.js"
+    "seed:egresos-recurrentes": "node --env-file=.env scripts/seed-egresos-recurrentes.js",
+    "repair:data": "node --env-file=.env scripts/repair-production-data.js"
   },
   "dependencies": {
     "@clerk/backend": "^3.8.3",
