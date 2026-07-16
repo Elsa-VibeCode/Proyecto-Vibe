@@ -86,6 +86,11 @@
         {guardando ? 'Guardando…' : 'Guardar'}
       </button>
     </form>
+
+    <div class="card links-extra">
+      <h2>Más configuración</h2>
+      <a href="/config/egresos-recurrentes">Egresos recurrentes (alertas del Panel)</a>
+    </div>
   {/if}
 </div>
 
@@ -103,6 +108,13 @@
     max-width: 480px;
   }
   .form-group { margin-bottom: 1rem; }
+  .links-extra {
+    padding: 1.25rem;
+    margin-top: 1rem;
+    max-width: 480px;
+  }
+  .links-extra h2 { font-size: 1rem; margin-bottom: 0.75rem; }
+  .links-extra a { color: var(--color-primary); }
   .alert-success {
     padding: 0.75rem 1rem;
     background: #ecfdf5;

@@ -17,6 +17,8 @@ import {
   esMesValido,
   reglaAplicaEnMes,
   redondear,
+  mesAnterior,
+  deltaPorcentual,
 } from './mesUtils.js';
 import { obtenerCachePanel, guardarCachePanel } from './panelCache.js';
 
@@ -63,13 +65,16 @@ export async function obtenerPanel(mesParam, { refrescar = false } = {}) {
   const cobertura = await coberturaGrupo(mes, recibe10pct);
   const deficitMes = redondear(Math.max(0, egresosGrupo - recibe10pct));
 
-  const [alertas, chart6meses, chart12meses, saldos, saldosYtd] = await Promise.all([
-    detectarAlertas(mes, configDoc),
-    datos6Meses(mes),
-    datos12Meses(mes),
-    evolucionMensual(mes, reglaDetalle),
-    evolucionYtd(mes, config.aporteConsultingPct, config.reglaAplica),
-  ]);
+  const [alertas, chart6meses, chart12meses, saldos, saldosYtd, facturasPrev, egresosGrupoPrev] =
+    await Promise.all([
+      detectarAlertas(mes),
+      datos6Meses(mes),
+      datos12Meses(mes),
+      evolucionMensual(mes, reglaDetalle),
+      evolucionYtd(mes, config.aporteConsultingPct, config.reglaAplica),
+      calcularFacturas(mesAnterior(mes)),
+      egresosGrupoMes(mesAnterior(mes)),
+    ]);
 
   const sinDatos =
     facturas.totalFacturas === 0 && egresos.count === 0;
@@ -90,6 +95,10 @@ export async function obtenerPanel(mesParam, { refrescar = false } = {}) {
         numPagadas: facturas.consulting.numPagadas,
         numPendientes: facturas.consulting.numPendientes,
         pctPagado: facturas.consulting.pctPagado,
+        deltaFacturadoMesAnterior: deltaPorcentual(
+          facturas.consulting.facturado,
+          facturasPrev.consulting.facturado
+        ),
       },
       technologies: {
         facturado: facturas.technologies.facturado,
@@ -100,7 +109,13 @@ export async function obtenerPanel(mesParam, { refrescar = false } = {}) {
         recibe10pct,
         reservaAcumulada,
         numFacturas: facturas.technologies.numFacturas,
+        numPagadas: facturas.technologies.numPagadas,
+        numPendientes: facturas.technologies.numPendientes,
         pctPagado: facturas.technologies.pctPagado,
+        deltaFacturadoMesAnterior: deltaPorcentual(
+          facturas.technologies.facturado,
+          facturasPrev.technologies.facturado
+        ),
       },
       grupo: {
         egresosTotal: egresosGrupo,
@@ -110,6 +125,7 @@ export async function obtenerPanel(mesParam, { refrescar = false } = {}) {
           consulting: cobertura.consulting,
           technologies: cobertura.technologies,
         },
+        deltaEgresosMesAnterior: deltaPorcentual(egresosGrupo, egresosGrupoPrev),
       },
     },
     alertas,

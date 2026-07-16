@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatearMonedaPanel, pctTexto } from '$lib/types/panel';
+  import { formatearMonedaPanel, pctTexto, textoDelta, deltaEsPositivo } from '$lib/types/panel';
 
   interface Props {
     titulo: string;
@@ -11,6 +11,7 @@
     enlace?: string;
     enlaceTexto?: string;
     delta?: number | null;
+    deltaEsGasto?: boolean;
     cargando?: boolean;
   }
 
@@ -24,8 +25,12 @@
     enlace = '',
     enlaceTexto = 'Ver detalle →',
     delta = null,
+    deltaEsGasto = false,
     cargando = false,
   }: Props = $props();
+
+  let deltaTexto = $derived(textoDelta(delta, deltaEsGasto));
+  let deltaBueno = $derived(deltaEsPositivo(delta, deltaEsGasto));
 </script>
 
 <article class="kpi-card card color-{color}" class:skeleton={cargando}>
@@ -38,11 +43,6 @@
   {:else}
     <header>
       <h3>{titulo}</h3>
-      {#if delta !== null}
-        <span class="delta" class:up={delta >= 0} class:down={delta < 0}>
-          {delta >= 0 ? '+' : ''}{Math.round(delta * 100)}%
-        </span>
-      {/if}
     </header>
 
     {#if enlace}
@@ -53,6 +53,10 @@
       <div class="kpi-principal" title={kpiTooltip}>
         {formatearMonedaPanel(kpi)}
       </div>
+    {/if}
+
+    {#if deltaTexto}
+      <p class="delta-line" class:good={deltaBueno} class:bad={!deltaBueno}>{deltaTexto}</p>
     {/if}
 
     <ul class="submetricas">
@@ -97,26 +101,11 @@
   .color-azul { --accent: #2563eb; }
   .color-naranja { --accent: #ea580c; }
 
-  header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  h3 {
+  header h3 {
     font-size: 1rem;
     font-weight: 700;
     color: var(--accent);
   }
-
-  .delta {
-    font-size: 0.75rem;
-    font-weight: 700;
-    padding: 0.15rem 0.45rem;
-    border-radius: 999px;
-  }
-  .delta.up { background: #ecfdf5; color: #047857; }
-  .delta.down { background: #fef2f2; color: #b91c1c; }
 
   .kpi-principal {
     font-size: 1.85rem;
@@ -135,6 +124,14 @@
     color: var(--accent);
     text-decoration: underline;
   }
+
+  .delta-line {
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin: -0.25rem 0 0;
+  }
+  .delta-line.good { color: #047857; }
+  .delta-line.bad { color: #b91c1c; }
 
   .submetricas {
     list-style: none;

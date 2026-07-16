@@ -16,6 +16,7 @@ import tiposGastoRoutes from './routes/tiposGasto.js';
 import configRoutes from './routes/config.js';
 import facturasRoutes from './routes/facturas.js';
 import panelRoutes from './routes/panel.js';
+import egresosRecurrentesRoutes from './routes/egresosRecurrentes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -74,6 +75,7 @@ app.use('/api/tipos-gasto', tiposGastoRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/facturas', facturasRoutes);
 app.use('/api/panel', panelRoutes);
+app.use('/api/egresos-recurrentes', egresosRecurrentesRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ mensaje: 'Ruta no encontrada' });

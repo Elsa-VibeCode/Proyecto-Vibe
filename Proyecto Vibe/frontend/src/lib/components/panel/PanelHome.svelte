@@ -1,18 +1,18 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '$lib/api';
-  import { formatearMonedaPanel, mesAnterior, pctTexto, deltaPct } from '$lib/types/panel';
+  import { formatearMonedaPanel, pctTexto } from '$lib/types/panel';
   import KpiCard from '$lib/components/panel/KpiCard.svelte';
   import Regla10Card from '$lib/components/panel/Regla10Card.svelte';
   import AlertasList from '$lib/components/panel/AlertasList.svelte';
   import Chart6Meses from '$lib/components/panel/Chart6Meses.svelte';
+  import MesSelector from '$lib/components/panel/MesSelector.svelte';
   import SaldosTable from '$lib/components/panel/SaldosTable.svelte';
   import type { PanelData } from '$lib/types/panel';
 
   let mesActivo = $state('');
   let comparar = $state(false);
   let panel = $state<PanelData | null>(null);
-  let panelPrev = $state<PanelData | null>(null);
   let cargando = $state(true);
   let error = $state('');
   let saldosYtd = $state(false);
@@ -47,13 +47,6 @@
       const qs = refrescar ? '&refrescar=1' : '';
       const data = await api<{ data: PanelData }>(`/panel?mes=${mesActivo}${qs}`);
       panel = data.data;
-
-      if (comparar) {
-        const prev = await api<{ data: PanelData }>(`/panel?mes=${mesAnterior(mesActivo)}`);
-        panelPrev = prev.data;
-      } else {
-        panelPrev = null;
-      }
     } catch (err) {
       error = err instanceof Error ? err.message : 'Error al cargar el panel';
       panel = null;
@@ -73,18 +66,9 @@
   }
 
   function onCompararChange() {
-    cargarPanel();
+    /* deltas vienen en el payload del panel; solo re-render */
   }
 
-  let dConsulting = $derived(
-    panel && panelPrev ? deltaPct(panel.unidades.consulting.facturado, panelPrev.unidades.consulting.facturado) : null
-  );
-  let dTech = $derived(
-    panel && panelPrev ? deltaPct(panel.unidades.technologies.facturado, panelPrev.unidades.technologies.facturado) : null
-  );
-  let dGrupo = $derived(
-    panel && panelPrev ? deltaPct(panel.unidades.grupo.egresosTotal, panelPrev.unidades.grupo.egresosTotal) : null
-  );
 </script>
 
 <div class="panel-home">
@@ -94,14 +78,7 @@
       <p>KPIs en tiempo real por unidad de negocio</p>
     </div>
     <div class="controles">
-      <label class="mes-select">
-        Mes:
-        <select bind:value={mesActivo} onchange={onMesChange} disabled={cargando && !panel}>
-          {#each opcionesMes as m}
-            <option value={m}>{m}</option>
-          {/each}
-        </select>
-      </label>
+      <MesSelector bind:mesActivo={mesActivo} {opcionesMes} disabled={cargando && !panel} onchange={onMesChange} />
 
       <label class="toggle-comp">
         <input type="checkbox" bind:checked={comparar} onchange={onCompararChange} />
@@ -118,6 +95,7 @@
       </button>
 
       <a class="link-config" href="/config">⚙ Config</a>
+      <a class="link-config" href="/config/egresos-recurrentes">📋 Recurrentes</a>
 
       {#if panel}
         <span class="actualizado" title={panel.desdeCache ? 'Desde caché (60s)' : 'Recién calculado'}>
@@ -169,7 +147,7 @@
       pctProgreso={panel?.unidades.consulting.pctPagado}
       enlace={`/facturacion?mesFacturacion=${mesActivo}`}
       enlaceTexto="Ver facturas del mes →"
-      delta={comparar ? dConsulting : null}
+      delta={comparar ? (panel?.unidades.consulting.deltaFacturadoMesAnterior ?? null) : null}
       cargando={cargando && !panel}
     />
 
@@ -184,11 +162,17 @@
               icono: '✓',
               label: 'Pagado',
               valor: formatearMonedaPanel(panel.unidades.technologies.pagado),
+              detalle: panel.unidades.technologies.numPagadas != null
+                ? `${panel.unidades.technologies.numPagadas} facturas`
+                : undefined,
             },
             {
               icono: '⏳',
               label: 'Pendiente',
               valor: formatearMonedaPanel(panel.unidades.technologies.pendiente),
+              detalle: panel.unidades.technologies.numPendientes != null
+                ? `${panel.unidades.technologies.numPendientes} facturas`
+                : undefined,
             },
             {
               icono: '💰',
@@ -204,7 +188,7 @@
         : []}
       enlace="/flujo"
       enlaceTexto="Ver flujo Technologies →"
-      delta={comparar ? dTech : null}
+      delta={comparar ? (panel?.unidades.technologies.deltaFacturadoMesAnterior ?? null) : null}
       cargando={cargando && !panel}
     />
 
@@ -234,7 +218,8 @@
         : []}
       enlace={`/egresos?mes=${mesActivo}`}
       enlaceTexto="Ver egresos del mes →"
-      delta={comparar ? dGrupo : null}
+      delta={comparar ? (panel?.unidades.grupo.deltaEgresosMesAnterior ?? null) : null}
+      deltaEsGasto={true}
       cargando={cargando && !panel}
     />
   </div>
@@ -282,21 +267,6 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.75rem;
-  }
-
-  .mes-select {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.9rem;
-    font-weight: 600;
-  }
-
-  .mes-select select {
-    padding: 0.4rem 0.6rem;
-    border-radius: var(--radius);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
   }
 
   .toggle-comp {

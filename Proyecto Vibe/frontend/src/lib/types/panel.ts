@@ -11,9 +11,10 @@ export interface PanelConsulting {
   pendiente: number;
   aporte10pct: number;
   numFacturas: number;
-  numPagadas: number;
-  numPendientes: number;
+  numPagadas?: number;
+  numPendientes?: number;
   pctPagado: number;
+  deltaFacturadoMesAnterior?: number | null;
 }
 
 export interface PanelTechnologies {
@@ -25,7 +26,10 @@ export interface PanelTechnologies {
   recibe10pct: number;
   reservaAcumulada: number;
   numFacturas: number;
+  numPagadas?: number;
+  numPendientes?: number;
   pctPagado: number;
+  deltaFacturadoMesAnterior?: number | null;
 }
 
 export interface PanelGrupo {
@@ -33,6 +37,7 @@ export interface PanelGrupo {
   recibio10pct: number;
   deficitMes: number;
   cobertura: { consulting: number; technologies: number };
+  deltaEgresosMesAnterior?: number | null;
 }
 
 export interface PanelAlerta {
@@ -112,6 +117,18 @@ export function pctTexto(valor: number): string {
 export function deltaPct(actual: number, anterior: number): number | null {
   if (anterior === 0) return null;
   return (actual - anterior) / anterior;
+}
+
+export function textoDelta(delta: number | null | undefined, esGasto = false): string {
+  if (delta === null || delta === undefined) return '';
+  const pct = Math.abs(delta * 100).toFixed(1);
+  const flecha = delta >= 0 ? '▲' : '▼';
+  return `${flecha} ${delta >= 0 ? '+' : '-'}${pct}% vs mes anterior`;
+}
+
+export function deltaEsPositivo(delta: number | null | undefined, esGasto = false): boolean {
+  if (delta === null || delta === undefined) return false;
+  return esGasto ? delta < 0 : delta >= 0;
 }
 
 /** Formato $1,234.56 para el Panel (2 decimales). */

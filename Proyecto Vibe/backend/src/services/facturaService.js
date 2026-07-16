@@ -183,7 +183,23 @@ export function construirFiltroFacturas(query = {}) {
     filtro.$or = [{ cliente: rx }, { concepto: rx }, { noFactura: rx }];
   }
 
+  if (query.vencidas === 'true') {
+    filtro.estatusPago = { $in: ['PENDIENTE', 'PARCIAL', 'VENCIDO'] };
+    const limite = haceDiasFactura(30);
+    filtro.fechaFacturacion = { $lt: limite };
+  } else if (query.porVencer7d === 'true') {
+    filtro.estatusPago = 'PENDIENTE';
+    filtro.fechaFacturacion = { $gt: haceDiasFactura(30), $lte: haceDiasFactura(23) };
+  }
+
   return filtro;
+}
+
+function haceDiasFactura(n) {
+  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
+  d.setDate(d.getDate() - n);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 export function construirFiltroFacturasMongo(query = {}) {

@@ -18,16 +18,16 @@
 
   interface Props {
     egreso?: Egreso | null;
+    prefill?: Partial<Egreso> | null;
     guardando?: boolean;
     onGuardar: (datos: Egreso) => void;
     onCancelar: () => void;
   }
 
-  let { egreso = null, guardando = false, onGuardar, onCancelar }: Props = $props();
+  let { egreso = null, prefill = null, guardando = false, onGuardar, onCancelar }: Props = $props();
 
   const hoy = new Date().toISOString().slice(0, 10);
-  // Snapshot no reactivo del egreso inicial (el form se monta de nuevo por edición).
-  const inicial = untrack(() => egreso);
+  const inicial = untrack(() => ({ ...prefill, ...egreso }));
 
   let fechaGasto = $state(inicial?.fechaGasto ? inicial.fechaGasto.slice(0, 10) : hoy);
   let proyecto = $state(inicial?.proyecto ?? '');

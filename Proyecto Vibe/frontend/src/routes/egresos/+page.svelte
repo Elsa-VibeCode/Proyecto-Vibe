@@ -27,6 +27,7 @@
   let importando = $state(false);
 
   let egresoEditando = $state<Egreso | null>(null);
+  let prefillNuevo = $state<Partial<Egreso> | null>(null);
 
   // Filtros
   const mesActual = new Date().toISOString().slice(0, 7);
@@ -63,8 +64,26 @@
   }
 
   onMount(async () => {
-    const mesUrl = $page.url.searchParams.get('mes');
+    const sp = $page.url.searchParams;
+    const mesUrl = sp.get('mes');
     if (mesUrl && /^\d{4}-\d{2}$/.test(mesUrl)) fMes = mesUrl;
+
+    if (sp.get('nuevo') === '1') {
+      const subtotal = Number(sp.get('subtotal') || 0);
+      prefillNuevo = {
+        tipoGasto: sp.get('tipoGasto') || '',
+        proveedor: sp.get('proveedor') || '',
+        unidad: (sp.get('unidad') as Egreso['unidad']) || 'Grupo',
+        concepto: sp.get('concepto') || '',
+        subtotal: subtotal > 0 ? subtotal : undefined,
+        estadoResultado: 'ADMINISTRATIVO',
+      };
+      egresoEditando = null;
+      vista = 'form';
+    }
+
+    const tipoFiltro = sp.get('tipoGasto');
+    if (tipoFiltro && sp.get('nuevo') !== '1') fTipoGasto = tipoFiltro;
 
     try {
       const tg = await api<{ tipos: TipoGasto[] }>('/tipos-gasto?activos=1');
@@ -87,6 +106,7 @@
 
   function nuevoEgreso() {
     egresoEditando = null;
+    prefillNuevo = null;
     vista = 'form';
   }
 
@@ -198,9 +218,13 @@
     <div class="card form-card">
       <EgresoForm
         egreso={egresoEditando}
+        prefill={prefillNuevo}
         {guardando}
         onGuardar={guardarEgreso}
-        onCancelar={() => (vista = 'lista')}
+        onCancelar={() => {
+          prefillNuevo = null;
+          vista = 'lista';
+        }}
       />
     </div>
   {:else}
