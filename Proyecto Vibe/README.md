@@ -260,6 +260,36 @@ PUBLIC_API_URL=https://proyecto-vibe-1.onrender.com/api
 4. Configura las variables de entorno en cada servicio.
 5. Cada `git push` a `main` redespliega automáticamente.
 
+## Complementos de pago (REP) — Fase F
+
+AdminSys **registra** complementos de pago (CFDI tipo P) emitidos en **Sicofi**; no los genera ni timbra.
+
+| Concepto | Detalle |
+|----------|---------|
+| **PPD** | Factura en parcialidades → requiere REP al cobrarse |
+| **PUE** | Pago en una exhibición → no requiere complemento |
+| **Deadline SAT** | Día **5 del mes siguiente** a la fecha de pago |
+| **Rutas UI** | `/complementos`, `/complementos/nuevo`, `/complementos/importar` |
+| **API** | `GET/POST/PATCH/DELETE /api/complementos`, `GET /api/facturas/pendientes-complemento` |
+
+### Migración al desplegar
+
+```bash
+cd backend
+npm run migrate:fase-f          # asigna metodoPago=NA a facturas existentes
+npm run migrate:fase-f -- --dry-run
+```
+
+Después clasifica manualmente cada factura como **PUE** o **PPD** en Facturación. El Panel avisa si hay facturas con `metodoPago=NA` o PPD pagadas sin REP.
+
+### Import Sicofi REP
+
+1. Exporta complementos desde Sicofi (CSV/Excel, tipo comprobante **P**).
+2. Ve a **Complementos → Importar Sicofi**.
+3. Revisa preview (dedup por UUID) e importa. Si la factura PPD no existe en AdminSys, aparece alerta sin bloquear el resto.
+
+---
+
 ## Scripts disponibles
 
 | Proyecto | Comando | Descripción |
@@ -268,6 +298,7 @@ PUBLIC_API_URL=https://proyecto-vibe-1.onrender.com/api
 | Raíz | `npm run dev:frontend` | Frontend en desarrollo |
 | Backend | `npm run dev` | Servidor con recarga automática |
 | Backend | `npm run seed` | Usuario inicial en MongoDB (legacy) |
+| Backend | `npm run migrate:fase-f` | Migración campos REP en Factura |
 | Backend | `npm start` | Servidor en producción |
 | Frontend | `npm run dev` | Servidor de desarrollo |
 | Frontend | `npm run build` | Build de producción |

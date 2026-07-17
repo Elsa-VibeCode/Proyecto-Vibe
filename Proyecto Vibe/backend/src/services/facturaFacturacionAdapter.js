@@ -73,6 +73,10 @@ export function facturaAFilaExcel(factura, mapeo, indiceMapa) {
   return {
     ...fila,
     facturaId: String(factura._id),
+    metodoPago: factura.metodoPago || 'PUE',
+    estatusComplemento: factura.estatusComplemento || 'no_aplica',
+    montoPagado: factura.montoPagado ?? 0,
+    saldoPendiente: factura.saldoPendiente ?? Math.max(0, (factura.total || 0) - (factura.montoPagado || 0)),
     unidadManual: Boolean(factura.unidadManual),
     unidadClasificada,
     estadoClasificacion,

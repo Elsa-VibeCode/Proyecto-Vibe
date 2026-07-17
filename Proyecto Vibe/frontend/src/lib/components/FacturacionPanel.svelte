@@ -190,6 +190,8 @@
     if (filtros.totalMax) params.set('totalMax', filtros.totalMax);
     if (filtros.soloSinClasificar) params.set('soloSinClasificar', filtros.soloSinClasificar);
     if (filtros.estadoClasificacion) params.set('estadoClasificacion', filtros.estadoClasificacion);
+    if (filtros.metodoPago) params.set('metodoPago', filtros.metodoPago);
+    if (filtros.soloPpdSinRep) params.set('soloPpdSinRep', filtros.soloPpdSinRep);
     if (modoVencidas) params.set('vencidas', 'true');
     if (modoPorVencer7d) params.set('porVencer7d', 'true');
 
@@ -225,8 +227,11 @@
     const sp = $page.url.searchParams;
     const mesUrl = sp.get('mesFacturacion');
     const estatusUrl = sp.get('estatusPago');
+    const metodoUrl = sp.get('metodoPago');
     if (mesUrl && /^\d{4}-\d{2}$/.test(mesUrl)) filtros.mesFacturacion = mesUrl;
     if (estatusUrl) filtros.estatusPago = estatusUrl;
+    if (metodoUrl && ['PUE', 'PPD', 'NA'].includes(metodoUrl)) filtros.metodoPago = metodoUrl;
+    if (sp.get('soloPpdSinRep') === 'true') filtros.soloPpdSinRep = 'true';
     if (sp.get('sinClasificar') === 'true') filtros.soloSinClasificar = 'true';
     modoVencidas = sp.get('vencidas') === 'true';
     modoPorVencer7d = sp.get('porVencer7d') === 'true';
@@ -495,6 +500,20 @@
     return col ? String(fila[col] ?? '').trim() : '';
   }
 
+  function badgeComplemento(fila: Record<string, unknown>): { clase: string; texto: string } {
+    const est = String(fila.estatusComplemento ?? 'no_aplica');
+    if (est === 'completo') return { clase: 'completo', texto: '✓ Completo' };
+    if (est === 'pendiente') return { clase: 'pendiente', texto: '⏳ Pendiente' };
+    if (est === 'parcial') return { clase: 'parcial', texto: '⏳ Parcial' };
+    return { clase: 'no-aplica', texto: '—' };
+  }
+
+  function mostrarRegistrarRep(fila: Record<string, unknown>): boolean {
+    if (fila.metodoPago !== 'PPD') return false;
+    const est = String(fila.estatusComplemento ?? '');
+    return est === 'pendiente' || est === 'parcial';
+  }
+
   let haySinClasificar = $derived(
     (resumen?.filas ?? []).some((f) => f.estadoClasificacion === 'no_encontrado')
   );
@@ -687,6 +706,27 @@
             <option value="no_encontrado">Sin clasificar</option>
           </select>
         </div>
+        <div class="form-group">
+          <label class="label" for="f-metodo-pago">Método pago CFDI</label>
+          <select id="f-metodo-pago" class="select" bind:value={filtros.metodoPago}>
+            <option value="">Todos</option>
+            <option value="PUE">PUE</option>
+            <option value="PPD">PPD</option>
+            <option value="NA">NA</option>
+          </select>
+        </div>
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              checked={filtros.soloPpdSinRep === 'true'}
+              onchange={(e) => {
+                filtros.soloPpdSinRep = e.currentTarget.checked ? 'true' : '';
+              }}
+            />
+            Solo PPD sin REP
+          </label>
+        </div>
         <div class="form-group checkbox-group">
           <label class="checkbox-label">
             <input
@@ -771,6 +811,7 @@
                 Unidad
                 {#if puedeEditar}<span class="col-editar" title="Editable por factura">✎</span>{/if}
               </th>
+              <th>Complemento</th>
               {#each columnasTabla() as columna}
                 <th>{columna}</th>
               {/each}
@@ -782,7 +823,7 @@
           <tbody>
             {#if (resumen.filas ?? []).length === 0}
               <tr>
-                <td colspan={2 + columnasTabla().length + (puedeEditar ? 1 : 0)} class="tabla-vacia">
+                <td colspan={3 + columnasTabla().length + (puedeEditar ? 1 : 0)} class="tabla-vacia">
                   Sin facturas con los filtros actuales.
                   {#if filtrosEstanActivos()}
                     <button type="button" class="link" onclick={limpiarFiltros}>Limpiar filtros</button>
@@ -791,6 +832,7 @@
               </tr>
             {:else}
             {#each resumen.filas ?? [] as fila}
+              {@const bc = badgeComplemento(fila)}
               <tr class:sin-clasificar={fila.estadoClasificacion === 'no_encontrado'}>
                 <td>
                   <span class="badge-clasif {claseBadge(fila)}">{etiquetaClasificacion(fila)}</span>
@@ -824,12 +866,24 @@
                     {fila.unidadClasificada === 'sin_clasificar' ? '—' : String(fila.unidadClasificada ?? '—')}
                   {/if}
                 </td>
+                <td>
+                  <span class="badge-rep {bc.clase}">{bc.texto}</span>
+                </td>
                 {#each columnasTabla() as columna}
                   <td>{valorCelda(fila, columna)}</td>
                 {/each}
                 {#if puedeEditar}
                   <td class="celda-acciones">
                     {#if fila.facturaId}
+                      {#if mostrarRegistrarRep(fila)}
+                        <a
+                          class="btn-rep"
+                          href="/complementos/nuevo?facturaId={String(fila.facturaId)}"
+                          title="Registrar complemento de pago"
+                        >
+                          Registrar REP
+                        </a>
+                      {/if}
                       <button
                         type="button"
                         class="btn-icono"
@@ -977,8 +1031,30 @@
   .select-unidad:not(.select-editable) { appearance: none; border: none; background: transparent; color: inherit; pointer-events: none; padding-left: 0; }
   .select-unidad.select-editable { border: 1px solid var(--color-border); border-radius: 6px; background: white; cursor: pointer; }
   .select-unidad.select-editable:focus { outline: 2px solid var(--color-primary); outline-offset: 1px; }
-  .col-acciones { width: 5rem; text-align: center; }
-  .celda-acciones { white-space: nowrap; text-align: center; }
+  .col-acciones { width: 8rem; text-align: center; }
+  .celda-acciones { white-space: nowrap; text-align: center; display: flex; flex-wrap: wrap; gap: 0.25rem; justify-content: center; align-items: center; }
+  .badge-rep {
+    font-size: 0.72rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-rep.completo { background: #dcfce7; color: #166534; }
+  .badge-rep.pendiente,
+  .badge-rep.parcial { background: #fef9c3; color: #854d0e; }
+  .badge-rep.no-aplica { background: #f1f5f9; color: #64748b; }
+  .btn-rep {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.2rem 0.45rem;
+    border-radius: 6px;
+    background: #fef9c3;
+    color: #854d0e;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .btn-rep:hover { background: #fde047; }
   .btn-icono {
     background: transparent;
     border: none;

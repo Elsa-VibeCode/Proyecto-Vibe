@@ -15,6 +15,7 @@ import {
   construirIndiceMapa,
   historialCliente,
   normalizarRfcEmisor,
+  normalizarMetodoPago,
   unidadValidaParaFactura,
 } from './facturaService.js';
 
@@ -526,6 +527,8 @@ export async function filaAModelo(fila, mapping, defaults, indiceMapa, filaNum) 
   }
 
   const uuid = String(valorColumna(fila, mapping.uuid)).trim().toLowerCase();
+  const metodoRaw = valorColumna(fila, mapping.metodoPago);
+  const metodoPago = normalizarMetodoPago(metodoRaw) || 'NA';
 
   if (errores.length) {
     return {
@@ -550,6 +553,7 @@ export async function filaAModelo(fila, mapping, defaults, indiceMapa, filaNum) 
     fechaPago,
     estatusEnvio,
     estatusPago,
+    metodoPago,
     rfcEmisor,
     uuid: uuid || undefined,
     unidad,
