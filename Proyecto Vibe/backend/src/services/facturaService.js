@@ -51,7 +51,8 @@ export const FILTRO_ACTIVAS = { deletedAt: null };
 
 const CAMPOS_AUDITORIA = [
   'fechaFacturacion', 'fechaPago', 'noFactura', 'cliente', 'concepto', 'unidad',
-  'subtotal', 'iva', 'total', 'estatusEnvio', 'estatusPago', 'complementoPago', 'rfcEmisor',
+  'subtotal', 'iva', 'total', 'estatusEnvio', 'estatusPago', 'metodoPago',
+  'complementoPago', 'rfcEmisor',
 ];
 
 // ---- Clasificación por cliente contra el Mapa de Unidades ----
@@ -117,6 +118,18 @@ export function normalizarEstatusEnvio(valor) {
   return undefined;
 }
 
+export function normalizarMetodoPago(valor) {
+  const n = String(valor ?? '')
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (!n) return undefined;
+  if (n === 'PUE' || n.includes('UNA EXHIB')) return 'PUE';
+  if (n === 'PPD' || n.includes('PARCIAL') || n.includes('DIFERID')) return 'PPD';
+  return undefined;
+}
+
 // ---- Filtros de listado ----
 export function rangoMesUtc(yyyyMm) {
   const [year, month] = String(yyyyMm ?? '').split('-').map(Number);
@@ -137,6 +150,9 @@ export function construirFiltroFacturas(query = {}) {
     cliente,
     estatusPago,
     sinClasificar,
+    metodoPago,
+    estatusComplemento,
+    soloPpdSinRep,
     totalMin,
     totalMax,
     q,
@@ -168,6 +184,20 @@ export function construirFiltroFacturas(query = {}) {
 
   if (sinClasificar === 'true' || sinClasificar === true) {
     filtro.unidad = null;
+  }
+
+  if (metodoPago && ['PUE', 'PPD', 'NA'].includes(String(metodoPago))) {
+    filtro.metodoPago = metodoPago;
+  }
+
+  if (estatusComplemento) {
+    filtro.estatusComplemento = estatusComplemento;
+  }
+
+  if (soloPpdSinRep === 'true' || soloPpdSinRep === true) {
+    filtro.metodoPago = 'PPD';
+    filtro.estatusPago = { $in: ['PAGADO', 'PARCIAL'] };
+    filtro.estatusComplemento = { $in: ['pendiente', 'parcial'] };
   }
 
   if (cliente) filtro.cliente = cliente;
@@ -432,6 +462,13 @@ export async function prepararDatosFactura(body) {
   datos.concepto = String(datos.concepto ?? '').trim();
   datos.cliente = cliente;
   datos.noFactura = String(datos.noFactura ?? '').trim();
+
+  if (datos.metodoPago !== undefined && datos.metodoPago !== null && datos.metodoPago !== '') {
+    const mp = normalizarMetodoPago(datos.metodoPago) || String(datos.metodoPago).toUpperCase();
+    if (['PUE', 'PPD', 'NA'].includes(mp)) datos.metodoPago = mp;
+  } else if (datos.metodoPago === undefined) {
+    datos.metodoPago = 'PUE';
+  }
 
   if (datos.unidad === undefined || datos.unidad === '' || datos.unidad === null) {
     datos.unidad = null;

@@ -481,6 +481,15 @@ export function filtrarFilas(filas, mapeo, filtros = {}) {
     if (filtros.soloSinClasificar === 'true' && fila.estadoClasificacion !== 'no_encontrado') {
       return false;
     }
+    if (filtros.metodoPago && fila.metodoPago !== filtros.metodoPago) {
+      return false;
+    }
+    if (filtros.soloPpdSinRep === 'true') {
+      if (fila.metodoPago !== 'PPD') return false;
+      if (!['pendiente', 'parcial'].includes(String(fila.estatusComplemento ?? ''))) return false;
+      const est = String(obtenerValor(fila, mapeo.estatusPago) ?? '').trim().toLowerCase();
+      if (!est.includes('pagad') && est !== 'parcial') return false;
+    }
     if (filtros.mesFacturacion) {
       const mesFact = mesDeValor(obtenerValor(fila, mapeo.fechaFacturacion));
       if (mesFact !== filtros.mesFacturacion) return false;

@@ -28,6 +28,7 @@ import {
   parsearArchivoSicofi,
 } from '../services/sicofiImportService.js';
 import { invalidarPanelPorMes, invalidarPanelCompleto } from '../services/panel/invalidarPanel.js';
+import { obtenerFacturasPendientesComplemento } from '../services/complementoPagoService.js';
 
 const PREVIEW_LIMIT = 500;
 
@@ -132,6 +133,16 @@ router.get('/conceptos', async (req, res) => {
   const cliente = String(req.query.cliente ?? '').trim();
   if (!cliente) return fail(res, 'Indique el cliente');
   ok(res, { conceptos: await conceptosDeCliente(cliente) });
+});
+
+router.get('/pendientes-complemento', async (req, res) => {
+  try {
+    const vencidas = req.query.vencidas === 'true';
+    const facturas = await obtenerFacturasPendientesComplemento({ vencidas });
+    ok(res, { facturas, total: facturas.length });
+  } catch (err) {
+    fail(res, err.message, 500);
+  }
 });
 
 router.post('/migrar', requiereRol('admin'), async (req, res) => {

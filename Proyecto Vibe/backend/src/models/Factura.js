@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 export const UNIDADES_FACTURA = ['Consulting', 'Technologies', 'Grupo', 'Strategy'];
 export const ESTATUS_ENVIO = ['ENVIADA', 'POR_ENVIAR', 'CANCELADA'];
 export const ESTATUS_PAGO = ['PAGADO', 'PENDIENTE', 'PARCIAL', 'VENCIDO', 'CANCELADO'];
+export const METODO_PAGO = ['PUE', 'PPD', 'NA'];
+export const ESTATUS_COMPLEMENTO = ['no_aplica', 'pendiente', 'parcial', 'completo'];
 export const RFC_EMISOR = ['GBL', 'GAVM', 'OTRO'];
 
 // Mapea la unidad almacenada a la unidad "efectiva" para lectura/agrupación.
@@ -42,6 +44,16 @@ const facturaSchema = new mongoose.Schema(
     total: { type: Number, default: 0 },
     estatusEnvio: { type: String, enum: ESTATUS_ENVIO, default: undefined },
     estatusPago: { type: String, enum: ESTATUS_PAGO, default: undefined },
+    metodoPago: { type: String, enum: METODO_PAGO, default: 'PUE', index: true },
+    requiereComplemento: { type: Boolean, default: false },
+    complementosEmitidos: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ComplementoPago' }],
+    montoPagado: { type: Number, default: 0 },
+    saldoPendiente: { type: Number, default: 0 },
+    estatusComplemento: {
+      type: String,
+      enum: ESTATUS_COMPLEMENTO,
+      default: 'no_aplica',
+    },
     complementoPago: { type: String, trim: true, default: '' },
     rfcEmisor: { type: String, enum: RFC_EMISOR, default: 'GBL' },
     mes: { type: String, index: true }, // YYYY-MM, calculado en pre-validate
@@ -62,6 +74,34 @@ facturaSchema.index(
 facturaSchema.pre('validate', function calcularMes() {
   if (this.fechaFacturacion) {
     this.mes = mesDesdeFecha(this.fechaFacturacion);
+  }
+});
+
+facturaSchema.pre('save', function aplicarReglasComplemento() {
+  const metodo = this.metodoPago || 'PUE';
+  this.requiereComplemento = metodo === 'PPD';
+
+  const total = Number(this.total) || 0;
+  const pagado = Number(this.montoPagado) || 0;
+  this.saldoPendiente = Math.max(0, Math.round((total - pagado) * 100) / 100);
+
+  if (metodo === 'NA' || metodo === 'PUE' || !this.requiereComplemento) {
+    this.estatusComplemento = 'no_aplica';
+    return;
+  }
+
+  const cobrada = ['PAGADO', 'PARCIAL'].includes(this.estatusPago);
+  if (!cobrada) {
+    this.estatusComplemento = 'no_aplica';
+    return;
+  }
+
+  if (pagado <= 0) {
+    this.estatusComplemento = 'pendiente';
+  } else if (this.saldoPendiente <= 0.01) {
+    this.estatusComplemento = 'completo';
+  } else {
+    this.estatusComplemento = 'parcial';
   }
 });
 

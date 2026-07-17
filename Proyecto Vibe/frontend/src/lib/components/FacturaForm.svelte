@@ -8,6 +8,7 @@
     EstatusPagoFactura,
     FacturaDocument,
     FacturaPayload,
+    MetodoPagoFactura,
     RfcEmisorFactura,
     UnidadFactura,
   } from '$lib/types/admin';
@@ -56,6 +57,7 @@
   let totalManual = $state(inicial?.total !== undefined);
   let total = $state<number>(inicial?.total ?? 0);
   let fechaPago = $state(fechaInput(inicial?.fechaPago));
+  let metodoPago = $state<MetodoPagoFactura>(inicial?.metodoPago ?? 'PUE');
   let estatusEnvio = $state<EstatusEnvioFactura>(inicial?.estatusEnvio ?? 'ENVIADA');
   let estatusPago = $state<EstatusPagoFactura>(inicial?.estatusPago ?? 'PENDIENTE');
   let rfcEmisor = $state<RfcEmisorFactura>(inicial?.rfcEmisor ?? 'GBL');
@@ -99,6 +101,7 @@
         iva: Number(iva),
         total: Number(total),
         fechaPago: fechaPago || undefined,
+        metodoPago,
         estatusEnvio,
         estatusPago,
         rfcEmisor,
@@ -129,6 +132,7 @@
           iva = borrador.iva ?? 0;
           total = borrador.total ?? 0;
           fechaPago = borrador.fechaPago ?? '';
+          metodoPago = borrador.metodoPago ?? 'PUE';
           estatusEnvio = borrador.estatusEnvio ?? 'ENVIADA';
           estatusPago = borrador.estatusPago ?? 'PENDIENTE';
           rfcEmisor = borrador.rfcEmisor ?? 'GBL';
@@ -256,6 +260,7 @@
           iva: Number(iva),
           total: Number(total),
           fechaPago: fechaPago || undefined,
+          metodoPago,
           estatusEnvio,
           estatusPago,
           rfcEmisor,
@@ -278,6 +283,7 @@
     iva = 0;
     total = 0;
     fechaPago = '';
+    metodoPago = 'PUE';
     estatusEnvio = 'ENVIADA';
     estatusPago = 'PENDIENTE';
     rfcEmisor = 'GBL';
@@ -465,6 +471,18 @@
         <option value="POR_ENVIAR">Por enviar</option>
         <option value="CANCELADA">Cancelada</option>
       </select>
+    </div>
+
+    <div class="form-group">
+      <label class="label" for="ff-metodo-pago">Método de pago CFDI *</label>
+      <select id="ff-metodo-pago" class="select" bind:value={metodoPago} onchange={marcarSucio}>
+        <option value="PUE">PUE — Pago en una sola exhibición</option>
+        <option value="PPD">PPD — Pago en parcialidades o diferido</option>
+        <option value="NA">NA — No aplica / desconocido</option>
+      </select>
+      {#if metodoPago === 'PPD'}
+        <span class="hint">Las facturas PPD requieren complemento de pago (REP) al cobrarse.</span>
+      {/if}
     </div>
 
     <div class="form-group">

@@ -4,6 +4,7 @@ import { EgresoRecurrente } from '../../models/EgresoRecurrente.js';
 import { FILTRO_ACTIVAS } from '../facturaService.js';
 import { redondear, mesAnterior, mesActualSistema, diaDelMesMexico, fechaMexico } from './mesUtils.js';
 import { filtroFacturasPanel, normalizarVista } from './vistaUtils.js';
+import { conteoPendientesComplemento } from '../complementoPagoService.js';
 
 function escaparRegex(texto) {
   return String(texto).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -218,13 +219,56 @@ export async function detectarSinClasificar(mes, vista = 'cobro') {
   ];
 }
 
+export async function detectarComplementosPendientes() {
+  const { total, vencidas, pendientes } = await conteoPendientesComplemento();
+  if (!total) return [];
+
+  const urgencia = vencidas > 0 ? 'alta' : 'media';
+  const partes = [`${total} factura${total === 1 ? '' : 's'} PPD pagada${total === 1 ? '' : 's'} sin REP`];
+  if (vencidas > 0) {
+    partes.push(`De ellas, ${vencidas} ${vencidas === 1 ? 'está' : 'están'} VENCIDA${vencidas === 1 ? '' : 'S'} (más de 5 días del mes siguiente)`);
+  }
+
+  return [
+    {
+      tipo: 'complementos_pendientes',
+      urgencia,
+      count: total,
+      vencidas,
+      pendientes,
+      descripcion: partes.join('. '),
+      enlace: vencidas > 0 ? '/complementos?vencidas=true' : '/complementos?estatus=pendientes',
+    },
+  ];
+}
+
+export async function detectarMetodoPagoIndefinido() {
+  const count = await Factura.countDocuments({
+    ...FILTRO_ACTIVAS,
+    metodoPago: 'NA',
+  });
+  if (!count) return [];
+
+  return [
+    {
+      tipo: 'metodo_pago_na',
+      urgencia: 'baja',
+      count,
+      descripcion: `${count} factura${count === 1 ? '' : 's'} sin método de pago definido — clasifícalas`,
+      enlace: '/facturacion?metodoPago=NA',
+    },
+  ];
+}
+
 export async function detectarAlertas(mes, vista = 'cobro') {
   const resultados = await Promise.all([
     detectarVencidas(),
     detectarPorVencer7Dias(),
+    detectarComplementosPendientes(),
     detectarEgresosRecurrentesFaltantes(mes),
     detectarNovamexArrastre(mes),
     detectarSinClasificar(mes, vista),
+    detectarMetodoPagoIndefinido(),
   ]);
 
   const alertas = resultados.flat();

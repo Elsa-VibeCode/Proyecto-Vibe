@@ -25,6 +25,8 @@ export type UnidadFactura = 'Consulting' | 'Technologies' | 'Grupo';
 
 export type EstatusEnvioFactura = 'ENVIADA' | 'POR_ENVIAR' | 'CANCELADA';
 export type EstatusPagoFactura = 'PAGADO' | 'PENDIENTE' | 'PARCIAL' | 'VENCIDO' | 'CANCELADO';
+export type MetodoPagoFactura = 'PUE' | 'PPD' | 'NA';
+export type EstatusComplemento = 'no_aplica' | 'pendiente' | 'parcial' | 'completo';
 export type RfcEmisorFactura = 'GBL' | 'GAVM' | 'OTRO';
 
 export interface FacturaPayload {
@@ -39,6 +41,7 @@ export interface FacturaPayload {
   fechaPago?: string;
   estatusEnvio: EstatusEnvioFactura;
   estatusPago: EstatusPagoFactura;
+  metodoPago?: MetodoPagoFactura;
   rfcEmisor: RfcEmisorFactura;
   complementoPago?: string;
 }
@@ -50,6 +53,10 @@ export interface FacturaDocument extends FacturaPayload {
   origen?: string;
   mes?: string;
   deletedAt?: string | null;
+  requiereComplemento?: boolean;
+  montoPagado?: number;
+  saldoPendiente?: number;
+  estatusComplemento?: EstatusComplemento;
 }
 
 export interface UnidadHistorialCliente {
@@ -337,6 +344,8 @@ export interface FiltrosFacturacion {
   totalMax: string;
   soloSinClasificar: string;
   estadoClasificacion: string;
+  metodoPago: string;
+  soloPpdSinRep: string;
 }
 
 const STORAGE_KEY_FACTURACION = 'facturacion-filtros';
@@ -352,6 +361,8 @@ export function filtrosFacturacionVacios(): FiltrosFacturacion {
     totalMax: '',
     soloSinClasificar: '',
     estadoClasificacion: '',
+    metodoPago: '',
+    soloPpdSinRep: '',
   };
 }
 

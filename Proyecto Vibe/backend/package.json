@@ -14,7 +14,8 @@
     "migrate:facturas": "node --env-file=.env scripts/migrate-facturas-from-excel.js",
     "seed:egresos-recurrentes": "node --env-file=.env scripts/seed-egresos-recurrentes.js",
     "repair:data": "node --env-file=.env scripts/repair-production-data.js",
-    "import:egresos-reporte": "node --env-file=.env scripts/import-egresos-reporte-facturas.js"
+    "import:egresos-reporte": "node --env-file=.env scripts/import-egresos-reporte-facturas.js",
+    "migrate:fase-f": "node --env-file=.env scripts/migrate-fase-f-complementos.js"
   },
   "dependencies": {
     "@clerk/backend": "^3.8.3",
