@@ -126,7 +126,10 @@
   <header class="page-header">
     <div>
       <h1>Importar complementos desde Sicofi</h1>
-      <p>Sube el CSV exportado de cfd.sicofi.com.mx (comprobantes tipo P)</p>
+      <p>
+        Sube el export de Sicofi: listado CFDI tipo P (CSV/Excel) o el <strong>Reporte Pagos</strong>
+        (.xlsx, p. ej. ReportePagos33).
+      </p>
     </div>
     <a href="/complementos" class="btn btn-secondary">← Volver al listado</a>
   </header>
