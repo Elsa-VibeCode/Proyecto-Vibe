@@ -39,8 +39,19 @@ function esTipoP(fila, mapping) {
   return t === 'p' || t.startsWith('p ') || (t.includes('complemento') && t.includes('pago'));
 }
 
+function esFormatoRecepcionPagos(columnas) {
+  const normalizadas = columnas.map(normalizarClave);
+  return (
+    normalizadas.includes('iddocumento') &&
+    normalizadas.includes('fechaemision') &&
+    normalizadas.includes('montototalpagos') &&
+    normalizadas.includes('uuid')
+  );
+}
+
 function esFormatoReportePagos(columnas) {
   const normalizadas = columnas.map(normalizarClave);
+  if (normalizadas.includes('iddocumento')) return false;
   const tiene = (fragmentos) =>
     normalizadas.some((col) => fragmentos.every((f) => col.includes(f)));
   return (
@@ -49,6 +60,75 @@ function esFormatoReportePagos(columnas) {
     normalizadas.includes('serie_1') &&
     normalizadas.includes('uuid')
   );
+}
+
+function esFilaCabeceraRecepcion(fila) {
+  const uuid = String(valorColumna(fila, 'UUID')).trim();
+  if (!uuid) return false;
+  if (String(valorColumna(fila, 'IdDocumento')).trim()) return false;
+  if (String(valorColumna(fila, 'Fecha Pago')).trim()) return false;
+  return true;
+}
+
+function filaRecepcionVacia(fila) {
+  if (!fila) return true;
+  return (
+    !String(valorColumna(fila, 'UUID')).trim() &&
+    !String(valorColumna(fila, 'IdDocumento')).trim() &&
+    !String(valorColumna(fila, 'Fecha Pago')).trim()
+  );
+}
+
+/** Sicofi recepción de pagos: cabecera REP + fila pago + fila IdDocumento (+ separador). */
+function parsearFilasRecepcionPagos(filas) {
+  const registros = [];
+
+  for (let i = 0; i < filas.length; i++) {
+    if (!esFilaCabeceraRecepcion(filas[i])) continue;
+
+    const filaHeader = i + 2;
+    const header = filas[i];
+    const pay = filas[i + 1] ?? {};
+    const doc = filas[i + 2] ?? {};
+
+    const uuid = String(valorColumna(header, 'UUID')).trim().toLowerCase();
+    const uuidFacturaRel = String(valorColumna(doc, 'IdDocumento')).trim().toLowerCase();
+
+    const serieFact =
+      String(valorColumna(doc, 'Serie_1') || valorColumna(doc, 'Serie')).trim();
+    const folioFact =
+      String(valorColumna(doc, 'Folio_1') || valorColumna(doc, 'Folio')).trim();
+    const noFacturaRel =
+      serieFact && folioFact ? `${serieFact}-${folioFact}` : '';
+
+    const serieRep = String(valorColumna(header, 'Serie')).trim();
+    const folioRep = String(valorColumna(header, 'Folio')).trim();
+    const folio = serieRep && folioRep ? `${serieRep}-${folioRep}` : folioRep;
+
+    const fechaEmision = parsearFechaCsv(valorColumna(header, 'FechaEmision'));
+    const fechaPago = parsearFechaCsv(valorColumna(pay, 'Fecha Pago'));
+    const monto =
+      parsearNumeroCsv(valorColumna(pay, 'Monto')) ??
+      parsearNumeroCsv(valorColumna(doc, 'ImpPagado')) ??
+      parsearNumeroCsv(valorColumna(header, 'MontoTotalPagos'));
+
+    registros.push({
+      fila: filaHeader,
+      uuid,
+      folio,
+      cliente: normalizarCliente(valorColumna(header, 'RFC Receptor')),
+      fechaEmision,
+      fechaPago,
+      monto,
+      uuidFacturaRel,
+      noFacturaRel,
+    });
+
+    i += 2;
+    if (i + 1 < filas.length && filaRecepcionVacia(filas[i + 1])) i += 1;
+  }
+
+  return registros;
 }
 
 /** Sicofi "Reporte Pagos" (.xlsx): fila par REP + fila detalle (UUID factura en Serie_1). */
@@ -270,6 +350,22 @@ export async function construirPreviewRep(buffer, nombreArchivo = '') {
   const uuidsExistentes = new Set(
     (await ComplementoPago.find({ uuid: { $ne: '' } }).select('uuid').lean()).map((c) => c.uuid)
   );
+
+  if (esFormatoRecepcionPagos(columnas)) {
+    const registros = parsearFilasRecepcionPagos(filas);
+    const { preview, contadores } = await enriquecerPreviewRep(registros, uuidsExistentes);
+
+    return {
+      columnas,
+      mapping: { formato: 'recepcion_pagos_sicofi' },
+      encoding,
+      colUuidRelacionado: 'IdDocumento',
+      preview: preview.slice(0, 500),
+      contadores,
+      totalFilas: registros.length,
+      fuente: 'Sicofi recepción de pagos',
+    };
+  }
 
   if (esFormatoReportePagos(columnas)) {
     const registros = parsearFilasReportePagos(filas);
