@@ -455,8 +455,15 @@ export async function prepararDatosFactura(body) {
   }
 
   if (!datos.estatusEnvio) datos.estatusEnvio = 'ENVIADA';
-  if (!datos.estatusPago) datos.estatusPago = datos.fechaPago ? 'PAGADO' : 'PENDIENTE';
-  if (datos.fechaPago && datos.estatusPago === 'PENDIENTE') datos.estatusPago = 'PAGADO';
+
+  const estatusNorm = normalizarEstatusPago(datos.estatusPago);
+  if (estatusNorm) datos.estatusPago = estatusNorm;
+
+  if (['PENDIENTE', 'VENCIDO', 'CANCELADO'].includes(datos.estatusPago)) {
+    datos.fechaPago = null;
+  } else if (!datos.estatusPago) {
+    datos.estatusPago = datos.fechaPago ? 'PAGADO' : 'PENDIENTE';
+  }
 
   datos.rfcEmisor = normalizarRfcEmisor(datos.rfcEmisor);
   datos.concepto = String(datos.concepto ?? '').trim();

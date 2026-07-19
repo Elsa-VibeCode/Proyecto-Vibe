@@ -85,9 +85,19 @@
     if (!totalManual) total = totalAuto;
   });
 
-  $effect(() => {
-    if (fechaPago && estatusPago === 'PENDIENTE') estatusPago = 'PAGADO';
-  });
+  function onEstatusPagoChange() {
+    if (estatusPago === 'PENDIENTE' || estatusPago === 'VENCIDO' || estatusPago === 'CANCELADO') {
+      fechaPago = '';
+    }
+    marcarSucio();
+  }
+
+  function onFechaPagoChange() {
+    if (fechaPago && (estatusPago === 'PENDIENTE' || estatusPago === 'VENCIDO')) {
+      estatusPago = 'PAGADO';
+    }
+    marcarSucio();
+  }
 
   $effect(() => {
     if (!modoEdicion && sucio) {
@@ -460,7 +470,7 @@
         class="input"
         type="date"
         bind:value={fechaPago}
-        oninput={marcarSucio}
+        oninput={onFechaPagoChange}
       />
     </div>
 
@@ -487,7 +497,7 @@
 
     <div class="form-group">
       <label class="label" for="ff-estatus-pago">Estatus pago *</label>
-      <select id="ff-estatus-pago" class="select" bind:value={estatusPago} onchange={marcarSucio}>
+      <select id="ff-estatus-pago" class="select" bind:value={estatusPago} onchange={onEstatusPagoChange}>
         <option value="PENDIENTE">Pendiente</option>
         <option value="PAGADO">Pagado</option>
         <option value="PARCIAL">Parcial</option>
