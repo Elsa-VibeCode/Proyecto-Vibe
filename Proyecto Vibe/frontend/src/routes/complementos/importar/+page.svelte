@@ -127,8 +127,8 @@
     <div>
       <h1>Importar complementos desde Sicofi</h1>
       <p>
-        Sube el export de Sicofi: listado CFDI tipo P (CSV/Excel) o el <strong>Reporte Pagos</strong>
-        (.xlsx, p. ej. ReportePagos33).
+        Sube el export de Sicofi: <strong>Reporte Pagos</strong> o <strong>recepción de pagos</strong>
+        (.xlsx/.csv), o listado CFDI tipo P.
       </p>
     </div>
     <a href="/complementos" class="btn btn-secondary">← Volver al listado</a>
