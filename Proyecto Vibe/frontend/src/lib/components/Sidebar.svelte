@@ -8,6 +8,7 @@
     { href: '/panel', label: 'Panel', icon: '📊' },
     { href: '/facturacion', label: 'Facturación', icon: '🧾' },
     { href: '/complementos', label: 'Complementos', icon: '📄' },
+    { href: '/honorarios', label: 'Honorarios', icon: '💼' },
     { href: '/egresos', label: 'Egresos', icon: '💸' },
     { href: '/clasificacion', label: 'Clasificación', icon: '🏷️' },
     { href: '/finanzas', label: 'Finanzas', icon: '💰' },
