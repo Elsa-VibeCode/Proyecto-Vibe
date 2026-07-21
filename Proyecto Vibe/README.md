@@ -282,11 +282,43 @@ npm run migrate:fase-f -- --dry-run
 
 Después clasifica manualmente cada factura como **PUE** o **PPD** en Facturación. El Panel avisa si hay facturas con `metodoPago=NA` o PPD pagadas sin REP.
 
+### Actualizar metodoPago desde Sicofi (masivo)
+
+Exporta facturas **tipo I** desde Sicofi (CSV/Excel con columna **Método de pago**):
+
+```bash
+cd backend
+npm run import:metodo-pago-sicofi -- ~/Downloads/tu-export-sicofi.csv --dry-run
+npm run import:metodo-pago-sicofi -- ~/Downloads/tu-export-sicofi.csv
+```
+
+El script empareja por UUID o folio, actualiza PUE/PPD en bloque e imprime un listado de **PPD + pagadas** para revisar REP. Guarda reporte en `backend/reports/metodo-pago-sicofi-YYYY-MM-DD.txt`.
+
 ### Import Sicofi REP
 
 1. Exporta complementos desde Sicofi (CSV/Excel, tipo comprobante **P**).
 2. Ve a **Complementos → Importar Sicofi**.
 3. Revisa preview (dedup por UUID) e importa. Si la factura PPD no existe en AdminSys, aparece alerta sin bloquear el resto.
+
+---
+
+## Honorarios Consulting
+
+Módulo para registrar ingresos por proyecto/quincena, deducir TECH y LICENCIA, y distribuir el neto entre consultores (FINDER / CLOSER / EJECUCIÓN) + comisión GRUPO. Porcentajes editables por proyecto y mes. **Solo rol admin.**
+
+| Concepto | Detalle |
+|----------|---------|
+| **Rutas UI** | `/honorarios` (consolidado), `/honorarios/captura`, `/honorarios/reportes` |
+| **API** | `/api/honorarios/*` (consultants, projects, monthly-distributions, reports, exports) |
+| **Cálculo** | Centavos enteros (sin float); redondeo a 2 decimales solo al mostrar |
+| **Defaults ≥ jun 2026** | TECH 5%, LICENCIA 20%, GRUPO 10%, FINDER 10%, CLOSER 15%, EJECUCIÓN 65% |
+| **Pre-junio** | TECH/DONATIVO 10%, LICENCIA 0% |
+
+```bash
+cd backend
+npm run seed:honorarios      # consultores, proyectos, presets
+npm run test:honorarios      # tests del motor de cálculo
+```
 
 ---
 
@@ -299,6 +331,8 @@ Después clasifica manualmente cada factura como **PUE** o **PPD** en Facturaci�
 | Backend | `npm run dev` | Servidor con recarga automática |
 | Backend | `npm run seed` | Usuario inicial en MongoDB (legacy) |
 | Backend | `npm run migrate:fase-f` | Migración campos REP en Factura |
+| Backend | `npm run seed:honorarios` | Seed consultores/proyectos honorarios |
+| Backend | `npm run test:honorarios` | Tests motor honorarios |
 | Backend | `npm start` | Servidor en producción |
 | Frontend | `npm run dev` | Servidor de desarrollo |
 | Frontend | `npm run build` | Build de producción |
