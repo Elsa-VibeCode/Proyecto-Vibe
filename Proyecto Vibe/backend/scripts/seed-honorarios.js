@@ -90,7 +90,8 @@ async function main() {
   }
 
   for (const nombre of PROYECTOS) {
-    await upsertPorNombre(HonorarioProject, nombre, { cliente: '' });
+    const extra = nombre === 'NOVAMEX' ? { pctIva: 0 } : {};
+    await upsertPorNombre(HonorarioProject, nombre, { cliente: '', ...extra });
     console.log(`  proyecto: ${nombre}`);
   }
 

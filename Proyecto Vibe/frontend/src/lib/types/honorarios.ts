@@ -16,6 +16,7 @@ export interface HonorarioProject {
   _id: string;
   nombre: string;
   cliente?: string;
+  pctIva?: number;
   activo: boolean;
 }
 
@@ -51,12 +52,16 @@ export interface CalculoDistribucion {
   pctTech: number;
   pctLicencia: number;
   pctGrupo: number;
+  pctIva: number;
   montoTech: number;
   montoLicencia: number;
   montoGrupo: number;
   netoDistribuible: number;
+  montoIva: number;
+  totalConIva: number;
   asignaciones: CalculoAsignacion[];
   sumaRolesPct: number;
+  sumaDistribucionPct?: number;
   advertenciaPct: string | null;
   totalPagado: number;
   diferenciaIngreso: number;
@@ -71,6 +76,7 @@ export interface MonthlyDistribution {
   pctTech: number;
   pctLicencia: number;
   pctGrupo: number;
+  pctIva?: number;
   grupoConsultantId?: string | Consultant | null;
   asignaciones: RoleAssignment[];
   observaciones?: string;

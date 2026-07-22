@@ -6,6 +6,9 @@
 
 export const ROLES_HONORARIO = ['FINDER', 'CLOSER', 'EJECUCION'];
 
+/** IVA estándar México (16%). Proyectos exentos (ej. NOVAMEX USD) usan 0. */
+export const DEFAULT_PCT_IVA = 0.16;
+
 export const DEFAULTS_JUNIO_2026 = {
   pctTech: 0.05,
   pctLicencia: 0.2,
@@ -59,6 +62,7 @@ export function centsTimesPct(cents, pct) {
  * @param {number} input.pctTech
  * @param {number} input.pctLicencia
  * @param {number} input.pctGrupo
+ * @param {number} [input.pctIva] — IVA sobre el valor sin IVA (solo informativo/facturación)
  * @param {Array<{rol:string,pct:number,consultantId?:string}>} input.asignaciones
  */
 export function calcularDistribucion(input) {
@@ -69,7 +73,12 @@ export function calcularDistribucion(input) {
   const pctTech = Number(input.pctTech) || 0;
   const pctLicencia = Number(input.pctLicencia) || 0;
   const pctGrupo = Number(input.pctGrupo) || 0;
+  const pctIva =
+    input.pctIva !== undefined && input.pctIva !== null && input.pctIva !== ''
+      ? Number(input.pctIva)
+      : DEFAULT_PCT_IVA;
 
+  // Todos los conceptos (TECH, LICENCIA, GRUPO, roles) se calculan sobre el valor sin IVA.
   const montoTech = centsTimesPct(ingresoTotal, pctTech);
   const montoLicencia = centsTimesPct(ingresoTotal, pctLicencia);
   const montoGrupo = centsTimesPct(ingresoTotal, pctGrupo);
@@ -77,7 +86,7 @@ export function calcularDistribucion(input) {
 
   const asignaciones = (input.asignaciones || []).map((a) => {
     const pct = Number(a.pct) || 0;
-    const monto = centsTimesPct(netoDistribuible, pct);
+    const monto = centsTimesPct(ingresoTotal, pct);
     return {
       consultantId: a.consultantId ?? null,
       rol: a.rol,
@@ -89,14 +98,18 @@ export function calcularDistribucion(input) {
 
   const sumaRolesPct = asignaciones.reduce((acc, a) => acc + (Number(a.pct) || 0), 0);
   const sumaRolesMonto = asignaciones.reduce((acc, a) => acc + a.montoCents, 0);
+  const sumaDistribucionPct = pctTech + pctLicencia + pctGrupo + sumaRolesPct;
   const advertenciaPct =
-    Math.abs(sumaRolesPct - 0.9) > 0.0001
-      ? `FINDER+CLOSER+EJECUCIÓN = ${(sumaRolesPct * 100).toFixed(2)}% (esperado ~90%)`
+    Math.abs(sumaDistribucionPct - 1) > 0.0001
+      ? `TECH+LICENCIA+GRUPO+roles = ${(sumaDistribucionPct * 100).toFixed(2)}% del valor sin IVA (esperado 100%)`
       : null;
 
   const totalPagado =
     montoTech + montoLicencia + montoGrupo + sumaRolesMonto;
   const diferenciaIngreso = ingresoTotal - totalPagado;
+
+  const montoIva = centsTimesPct(ingresoTotal, pctIva);
+  const totalConIva = ingresoTotal + montoIva;
 
   return {
     ingreso1aQna: fromCents(ingreso1a),
@@ -105,12 +118,16 @@ export function calcularDistribucion(input) {
     pctTech,
     pctLicencia,
     pctGrupo,
+    pctIva,
     montoTech: fromCents(montoTech),
     montoLicencia: fromCents(montoLicencia),
     montoGrupo: fromCents(montoGrupo),
     netoDistribuible: fromCents(netoDistribuible),
+    montoIva: fromCents(montoIva),
+    totalConIva: fromCents(totalConIva),
     asignaciones,
     sumaRolesPct,
+    sumaDistribucionPct,
     advertenciaPct,
     totalPagado: fromCents(totalPagado),
     diferenciaIngreso: fromCents(diferenciaIngreso),
@@ -123,6 +140,8 @@ export function calcularDistribucion(input) {
       netoDistribuible,
       sumaRolesMonto,
       totalPagado,
+      montoIva,
+      totalConIva,
     },
   };
 }

@@ -304,13 +304,14 @@ El script empareja por UUID o folio, actualiza PUE/PPD en bloque e imprime un li
 
 ## Honorarios Consulting
 
-Módulo para registrar ingresos por proyecto/quincena, deducir TECH y LICENCIA, y distribuir el neto entre consultores (FINDER / CLOSER / EJECUCIÓN) + comisión GRUPO. Porcentajes editables por proyecto y mes. **Solo rol admin.**
+Módulo para registrar ingresos **sin IVA** por proyecto/quincena y distribuir TECH, LICENCIA, GRUPO y roles de consultor (FINDER / CLOSER / EJECUCIÓN) como % del valor del proyecto. El IVA (16% por defecto, 0% exento ej. NOVAMEX) se calcula al final solo como referencia de facturación. Porcentajes editables por proyecto y mes. **Solo rol admin.**
 
 | Concepto | Detalle |
 |----------|---------|
 | **Rutas UI** | `/honorarios` (consolidado), `/honorarios/captura`, `/honorarios/reportes` |
 | **API** | `/api/honorarios/*` (consultants, projects, monthly-distributions, reports, exports) |
-| **Cálculo** | Centavos enteros (sin float); redondeo a 2 decimales solo al mostrar |
+| **Cálculo** | Centavos enteros; todos los % sobre valor sin IVA; IVA informativo al final |
+| **Validación** | TECH + LICENCIA + GRUPO + roles debe sumar 100% del valor sin IVA |
 | **Defaults ≥ jun 2026** | TECH 5%, LICENCIA 20%, GRUPO 10%, FINDER 10%, CLOSER 15%, EJECUCIÓN 65% |
 | **Pre-junio** | TECH/DONATIVO 10%, LICENCIA 0% |
 

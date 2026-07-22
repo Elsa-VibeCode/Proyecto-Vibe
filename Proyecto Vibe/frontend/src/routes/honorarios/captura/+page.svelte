@@ -26,6 +26,7 @@
   let pctTech = $state(0.05);
   let pctLicencia = $state(0.2);
   let pctGrupo = $state(0.1);
+  let pctIva = $state(0.16);
   let grupoConsultantId = $state('');
   let observaciones = $state('');
   let asignaciones = $state<
@@ -68,6 +69,7 @@
       pctTech = d.pctTech;
       pctLicencia = d.pctLicencia;
       pctGrupo = d.pctGrupo;
+      pctIva = d.pctIva ?? 0.16;
       grupoConsultantId =
         typeof d.grupoConsultantId === 'object' && d.grupoConsultantId
           ? d.grupoConsultantId._id
@@ -100,6 +102,7 @@
             pctTech,
             pctLicencia,
             pctGrupo,
+            pctIva,
             asignaciones,
           }),
         }
@@ -169,6 +172,7 @@
           pctTech,
           pctLicencia,
           pctGrupo,
+          pctIva,
           grupoConsultantId: grupoConsultantId || null,
           asignaciones,
           observaciones,
@@ -199,7 +203,7 @@
   <header class="page-header">
     <div>
       <h1>Honorarios Consulting — Captura</h1>
-      <p>Ingresos por quincena, deducciones y distribución por rol (editable por proyecto/mes)</p>
+      <p>Ingresos sin IVA por quincena; deducciones y roles sobre el valor del proyecto; IVA se calcula al final</p>
     </div>
     <div class="header-actions">
       <a href="/honorarios" class="btn btn-secondary">Vista consolidada</a>
@@ -253,7 +257,7 @@
     {:else}
       <section class="card grid-2">
         <div class="form-group">
-          <label class="label" for="hc-q1">Ingreso 1a quincena</label>
+          <label class="label" for="hc-q1">Ingreso 1a quincena (sin IVA)</label>
           <input
             id="hc-q1"
             class="input"
@@ -265,7 +269,7 @@
           />
         </div>
         <div class="form-group">
-          <label class="label" for="hc-q2">Ingreso 2da quincena</label>
+          <label class="label" for="hc-q2">Ingreso 2da quincena (sin IVA)</label>
           <input
             id="hc-q2"
             class="input"
@@ -317,6 +321,20 @@
             oninput={() => refrescarPreview()}
           />
           <span class="hint">{pctLabel(pctGrupo)}</span>
+        </div>
+        <div class="form-group">
+          <label class="label" for="hc-iva">% IVA</label>
+          <input
+            id="hc-iva"
+            class="input"
+            type="number"
+            step="0.01"
+            min="0"
+            max="1"
+            bind:value={pctIva}
+            oninput={() => refrescarPreview()}
+          />
+          <span class="hint">{pctLabel(pctIva)} — sobre valor sin IVA (0% = exento)</span>
         </div>
         <div class="form-group">
           <label class="label" for="hc-grupo-c">Consultor GRUPO</label>
@@ -398,10 +416,10 @@
             <div class="alert alert-warn">{calculo.advertenciaPct}</div>
           {/if}
           <div class="kpi-row">
-            <div><span class="muted">Ingreso total</span><strong>{money(calculo.ingresoTotal)}</strong></div>
+            <div><span class="muted">Ingreso total (sin IVA)</span><strong>{money(calculo.ingresoTotal)}</strong></div>
             <div><span class="muted">TECH</span><strong>{money(calculo.montoTech)}</strong></div>
             <div><span class="muted">LICENCIA</span><strong>{money(calculo.montoLicencia)}</strong></div>
-            <div><span class="muted">Neto distribuible</span><strong>{money(calculo.netoDistribuible)}</strong></div>
+            <div><span class="muted">Neto (ref.)</span><strong>{money(calculo.netoDistribuible)}</strong></div>
             <div><span class="muted">GRUPO</span><strong>{money(calculo.montoGrupo)}</strong></div>
             <div><span class="muted">Total pagado</span><strong>{money(calculo.totalPagado)}</strong></div>
             <div>
@@ -410,6 +428,8 @@
                 >{money(calculo.diferenciaIngreso)}</strong
               >
             </div>
+            <div><span class="muted">IVA ({pctLabel(calculo.pctIva)})</span><strong>{money(calculo.montoIva)}</strong></div>
+            <div><span class="muted">Total con IVA</span><strong>{money(calculo.totalConIva)}</strong></div>
           </div>
           <table class="tabla">
             <thead>
