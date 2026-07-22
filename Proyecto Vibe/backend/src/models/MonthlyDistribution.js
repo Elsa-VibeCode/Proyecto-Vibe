@@ -33,6 +33,8 @@ const monthlyDistributionSchema = new mongoose.Schema(
     pctTech: { type: Number, default: 0.05, min: 0, max: 1 },
     pctLicencia: { type: Number, default: 0.2, min: 0, max: 1 },
     pctGrupo: { type: Number, default: 0.1, min: 0, max: 1 },
+    /** IVA sobre el valor sin IVA (solo referencia de facturación). */
+    pctIva: { type: Number, default: 0.16, min: 0, max: 1 },
     grupoConsultantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Consultant',

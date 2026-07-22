@@ -18,6 +18,7 @@ function enriquecerConCalculo(doc) {
     pctTech: plain.pctTech,
     pctLicencia: plain.pctLicencia,
     pctGrupo: plain.pctGrupo,
+    pctIva: plain.pctIva,
     asignaciones: (plain.asignaciones || []).map((a) => ({
       consultantId: a.consultantId,
       rol: a.rol,
@@ -114,7 +115,9 @@ export async function obtenerOCrearBorrador(projectId, periodo) {
   let doc = await MonthlyDistribution.findOne({ projectId, periodo });
   if (doc) return enriquecerConCalculo(doc);
 
+  const proyecto = await HonorarioProject.findById(projectId).lean();
   const defs = defaultsPorPeriodo(periodo);
+  const pctIva = proyecto?.pctIva ?? 0.16;
   return {
     _id: null,
     projectId,
@@ -124,12 +127,14 @@ export async function obtenerOCrearBorrador(projectId, periodo) {
     pctTech: defs.pctTech,
     pctLicencia: defs.pctLicencia,
     pctGrupo: defs.pctGrupo,
+    pctIva,
     grupoConsultantId: null,
     asignaciones: [],
     observaciones: '',
     calculo: calcularDistribucion({
       ingreso1aQna: 0,
       ingreso2daQna: 0,
+      pctIva,
       ...defs,
       asignaciones: [],
     }),
@@ -144,6 +149,7 @@ export async function previewCalculo(body) {
     pctTech: body.pctTech,
     pctLicencia: body.pctLicencia,
     pctGrupo: body.pctGrupo,
+    pctIva: body.pctIva,
     asignaciones: body.asignaciones || [],
   });
 }
@@ -161,6 +167,7 @@ export async function upsertDistribucion(datos, clerkUserId) {
     pctTech: Number(datos.pctTech),
     pctLicencia: Number(datos.pctLicencia),
     pctGrupo: Number(datos.pctGrupo),
+    pctIva: datos.pctIva !== undefined ? Number(datos.pctIva) : 0.16,
     grupoConsultantId: datos.grupoConsultantId || null,
     asignaciones,
     observaciones: String(datos.observaciones || '').trim(),
@@ -229,6 +236,7 @@ export async function reporteMensual(periodo) {
       pctTech: d.pctTech,
       pctLicencia: d.pctLicencia,
       pctGrupo: d.pctGrupo,
+      pctIva: d.pctIva,
       asignaciones: (d.asignaciones || []).map((a) => ({
         consultantId: a.consultantId?._id || a.consultantId,
         rol: a.rol,
@@ -384,6 +392,7 @@ export async function reporteConsultor(consultantId, { desde, hasta } = {}) {
       pctTech: d.pctTech,
       pctLicencia: d.pctLicencia,
       pctGrupo: d.pctGrupo,
+      pctIva: d.pctIva,
       asignaciones: (d.asignaciones || []).map((a) => ({
         consultantId: String(a.consultantId),
         rol: a.rol,
@@ -467,6 +476,7 @@ export async function reporteIngresos({ desde, hasta } = {}) {
       pctTech: d.pctTech,
       pctLicencia: d.pctLicencia,
       pctGrupo: d.pctGrupo,
+      pctIva: d.pctIva,
       asignaciones: [],
     });
 
