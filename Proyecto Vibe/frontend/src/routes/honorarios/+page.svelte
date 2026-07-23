@@ -98,6 +98,7 @@
               {#each reporte.consultores as c}
                 <th colspan="2">{c.nombre}</th>
               {/each}
+              <th></th>
             </tr>
             <tr class="subhead">
               <th></th>
@@ -110,6 +111,7 @@
                 <th>Total</th>
                 <th>Q1 / Q2</th>
               {/each}
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -131,6 +133,13 @@
                     >{money(v?.q1 ?? 0)} / {money(v?.q2 ?? 0)}</td
                   >
                 {/each}
+                <td class="acciones">
+                  <a
+                    class="link-edit"
+                    href={`/honorarios/captura?projectId=${f.projectId}&periodo=${periodo}`}
+                    >Editar</a
+                  >
+                </td>
               </tr>
             {/each}
           </tbody>
@@ -149,6 +158,7 @@
                   >{money(v?.q1 ?? 0)} / {money(v?.q2 ?? 0)}</td
                 >
               {/each}
+              <td></td>
             </tr>
           </tfoot>
         </table>
@@ -211,6 +221,17 @@
   .badge-warn {
     color: #b45309;
     margin-left: 0.25rem;
+  }
+  .acciones {
+    text-align: center;
+  }
+  .link-edit {
+    color: #1d4ed8;
+    font-weight: 500;
+    text-decoration: none;
+  }
+  .link-edit:hover {
+    text-decoration: underline;
   }
   tfoot td {
     border-top: 2px solid #94a3b8;
