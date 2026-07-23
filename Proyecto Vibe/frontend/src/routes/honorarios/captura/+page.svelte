@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   import { auth } from '$lib/auth';
   import { api } from '$lib/api';
   import {
@@ -190,7 +191,14 @@
 
   onMount(async () => {
     if (!puedeAdmin) return;
+    const sp = $page.url.searchParams;
+    const qProject = sp.get('projectId');
+    const qPeriodo = sp.get('periodo');
+    if (qPeriodo && /^\d{4}-\d{2}$/.test(qPeriodo)) periodo = qPeriodo;
     await cargarCatalogos();
+    if (qProject && proyectos.some((p) => p._id === qProject)) {
+      projectId = qProject;
+    }
     await cargarBorrador();
   });
 </script>
