@@ -48,6 +48,7 @@ import {
   resumenFacturasConsultoria,
   resumenEgresosConsultoria,
 } from '../services/consultoriaIngresosService.js';
+import { dashboardConsultoria } from '../services/consultoriaDashboardService.js';
 
 const router = Router();
 const ROLES_EDICION = ['admin', 'editor'];
@@ -71,7 +72,7 @@ router.get('/meta', (_req, res) => {
   ok(res, {
     modulo: 'consultoria',
     nombre: 'Consultoría (BWConsulting)',
-    etapa: 5,
+    etapa: 6,
     enums: {
       ubicaciones: UBICACIONES_CONSULTORIA,
       tiposCliente: TIPOS_CLIENTE,
@@ -82,6 +83,15 @@ router.get('/meta', (_req, res) => {
       statusProyecto: STATUS_PROYECTO,
     },
   });
+});
+
+// Dashboard
+router.get('/dashboard', async (req, res) => {
+  try {
+    ok(res, await dashboardConsultoria(req.query));
+  } catch (err) {
+    fail(res, err.message, 500);
+  }
 });
 
 // Consultores (Honorarios)
