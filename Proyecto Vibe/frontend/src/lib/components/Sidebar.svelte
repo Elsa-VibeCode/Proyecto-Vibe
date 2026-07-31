@@ -9,6 +9,7 @@
     { href: '/facturacion', label: 'Facturación', icon: '🧾' },
     { href: '/complementos', label: 'Complementos', icon: '📄' },
     { href: '/honorarios', label: 'Honorarios', icon: '💼' },
+    { href: '/consultoria', label: 'Consultoría', icon: '🧭' },
     { href: '/egresos', label: 'Egresos', icon: '💸' },
     { href: '/clasificacion', label: 'Clasificación', icon: '🏷️' },
     { href: '/finanzas', label: 'Finanzas', icon: '💰' },

@@ -19,7 +19,9 @@
     "import:metodo-pago-sicofi": "node --env-file=.env scripts/import-metodo-pago-sicofi.js",
     "sync:estatus-complementos": "node --env-file=.env scripts/sync-estatus-pago-complementos.js",
     "seed:honorarios": "node --env-file=.env scripts/seed-honorarios.js",
-    "test:honorarios": "node --test scripts/test-honorarios-motor.js"
+    "seed:consultoria": "node --env-file=.env scripts/seed-consultoria.js",
+    "test:honorarios": "node --test scripts/test-honorarios-motor.js",
+    "test:consultoria": "node --test scripts/test-consultoria-motor.js"
   },
   "dependencies": {
     "@clerk/backend": "^3.8.3",

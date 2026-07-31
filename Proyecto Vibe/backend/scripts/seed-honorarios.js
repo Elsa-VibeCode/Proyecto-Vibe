@@ -13,7 +13,7 @@ import {
   DEFAULTS_PRE_JUNIO_2026,
 } from '../src/utils/honorariosMotor.js';
 
-const CONSULTORES = ['Chava', 'AP', 'Ulises', 'Elsa', 'Roberto', 'Tony'];
+const CONSULTORES = ['Chava', 'AP', 'Ulises', 'Elsa', 'Roberto', 'Tony', 'Mario'];
 
 const PROYECTOS = [
   'NOVAMEX',
