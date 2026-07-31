@@ -323,6 +323,27 @@ npm run test:honorarios      # tests del motor de cálculo
 
 ---
 
+## Consultoría (BWConsulting)
+
+Módulo de seguimiento operativo de Consultoría (antes BWS): pipeline, proyectos, ingresos auditables. Montos **sin IVA** (mismo criterio que Honorarios). **Egresos** = datos existentes del módulo Egresos (unidad Consulting). Auth Clerk (`admin` | `editor`).
+
+| Concepto | Detalle |
+|----------|---------|
+| **Rutas UI** | `/consultoria`, `/consultoria/propuestas` |
+| **API** | `/api/consultoria` (clientes, propuestas, resumen, seed) |
+| **Colecciones** | Cliente, Propuesta, Proyecto, IngresoProyecto, IngresoMensual, NominaMensual, AuditLog |
+| **Reutiliza** | `Consultant` (Honorarios, incl. Mario), `Factura`, `Egreso` |
+| **Cierre de mes** | Manual; snapshot + audit_log |
+| **Etapa actual** | 3 — CRUD propuestas |
+
+```bash
+cd backend
+npm run seed:consultoria     # Mario + propuestas enero 2025
+npm run test:consultoria     # motor: sumas, %, acumulados, gap, conciliación
+```
+
+---
+
 ## Scripts disponibles
 
 | Proyecto | Comando | Descripción |
@@ -333,7 +354,9 @@ npm run test:honorarios      # tests del motor de cálculo
 | Backend | `npm run seed` | Usuario inicial en MongoDB (legacy) |
 | Backend | `npm run migrate:fase-f` | Migración campos REP en Factura |
 | Backend | `npm run seed:honorarios` | Seed consultores/proyectos honorarios |
+| Backend | `npm run seed:consultoria` | Seed propuestas Consultoría ene 2025 |
 | Backend | `npm run test:honorarios` | Tests motor honorarios |
+| Backend | `npm run test:consultoria` | Tests motor consultoría |
 | Backend | `npm start` | Servidor en producción |
 | Frontend | `npm run dev` | Servidor de desarrollo |
 | Frontend | `npm run build` | Build de producción |

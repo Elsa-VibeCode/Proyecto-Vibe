@@ -17,6 +17,7 @@ import configRoutes from './routes/config.js';
 import facturasRoutes from './routes/facturas.js';
 import complementosRoutes from './routes/complementos.js';
 import honorariosRoutes from './routes/honorarios.js';
+import consultoriaRoutes from './routes/consultoria.js';
 import panelRoutes from './routes/panel.js';
 import egresosRecurrentesRoutes from './routes/egresosRecurrentes.js';
 
@@ -78,6 +79,7 @@ app.use('/api/config', configRoutes);
 app.use('/api/facturas', facturasRoutes);
 app.use('/api/complementos', complementosRoutes);
 app.use('/api/honorarios', honorariosRoutes);
+app.use('/api/consultoria', consultoriaRoutes);
 app.use('/api/panel', panelRoutes);
 app.use('/api/egresos-recurrentes', egresosRecurrentesRoutes);
 
