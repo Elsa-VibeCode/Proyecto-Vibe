@@ -27,10 +27,11 @@
         <p>Pipeline comercial: alta, filtros, Kanban y resumen.</p>
         <span class="cta">Abrir →</span>
       </a>
-      <div class="card muted-card">
+      <a class="card link-card" href="/consultoria/proyectos">
         <h2>Proyectos</h2>
-        <p>Operación por consultor — etapa 4.</p>
-      </div>
+        <p>Operación por consultor/cliente, semáforo y % compartido.</p>
+        <span class="cta">Abrir →</span>
+      </a>
       <div class="card muted-card">
         <h2>Ingresos</h2>
         <p>Conciliación con facturas — etapa 5.</p>

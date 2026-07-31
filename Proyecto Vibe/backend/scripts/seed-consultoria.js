@@ -5,16 +5,21 @@
  */
 import mongoose from 'mongoose';
 import { connectDB } from '../src/config/db.js';
-import { seedPropuestasEnero2025 } from '../src/services/consultoriaService.js';
+import { seedPropuestasEnero2025, seedProyectosOperacion } from '../src/services/consultoriaService.js';
 
 async function main() {
   await connectDB();
   console.log('=== Seed Consultoría (BWConsulting) ===');
-  const r = await seedPropuestasEnero2025({
+  const p = await seedPropuestasEnero2025({
     clerkUserId: 'seed-script',
     email: 'seed@local',
   });
-  console.log(`  propuestas: ${r.creadas} creadas, ${r.actualizadas} actualizadas (${r.total} total)`);
+  console.log(`  propuestas: ${p.creadas} creadas, ${p.actualizadas} actualizadas (${p.total} total)`);
+  const pr = await seedProyectosOperacion({
+    clerkUserId: 'seed-script',
+    email: 'seed@local',
+  });
+  console.log(`  proyectos: ${pr.creadas} creadas, ${pr.actualizadas} actualizadas (${pr.total} total)`);
   console.log('Listo.');
   await mongoose.disconnect();
 }

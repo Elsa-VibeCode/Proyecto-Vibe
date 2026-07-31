@@ -76,6 +76,53 @@ export interface ConsultoriaPropuesta {
   notas?: string;
 }
 
+export interface ConsultoriaProyecto {
+  _id: string;
+  consultorId: string | ConsultorRef;
+  rol: RolProyecto;
+  consultorCompartidoId?: string | ConsultorRef | null;
+  pctConsultorPrincipal: number;
+  pctConsultorCompartido: number;
+  clienteId: string | ClienteRef;
+  descripcion: string;
+  tipo: TipoProyecto;
+  status: StatusProyecto;
+  propuestaId?: string | { _id: string; numeroConsecutivo?: number; anio?: number; mes?: number } | null;
+  fechaInicio?: string | null;
+  fechaFinEstimada?: string | null;
+  fechaFinReal?: string | null;
+  montoContratado: number;
+  pctIva: number;
+  notas?: string;
+  activo: boolean;
+}
+
+export interface ResumenProyectos {
+  total: number;
+  montoContratadoTotal: number;
+  porStatus: Record<StatusProyecto, number>;
+  porTipo: Record<TipoProyecto, number>;
+  porConsultor: {
+    consultorId: string;
+    nombre: string;
+    total: number;
+    porStatus: Record<StatusProyecto, number>;
+  }[];
+}
+
+export const STATUS_PROYECTO_LABEL: Record<StatusProyecto, string> = {
+  INICIANDO: 'Iniciando',
+  EN_PROCESO: 'En proceso',
+  TERMINADO: 'Terminado',
+};
+
+export const TIPO_PROYECTO_LABEL: Record<TipoProyecto, string> = {
+  CONSULTORIA: 'Consultoría',
+  PLATAFORMA: 'Plataforma',
+  CONSULTORIA_Y_PLATAFORMA: 'Consultoría y plataforma',
+};
+
+
 export interface ResumenPropuestas {
   total: number;
   montoTotal: number;
