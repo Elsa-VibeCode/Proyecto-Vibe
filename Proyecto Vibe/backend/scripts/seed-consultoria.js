@@ -6,6 +6,7 @@
 import mongoose from 'mongoose';
 import { connectDB } from '../src/config/db.js';
 import { seedPropuestasEnero2025, seedProyectosOperacion } from '../src/services/consultoriaService.js';
+import { seedHistoricoIngresos } from '../src/services/consultoriaIngresosService.js';
 
 async function main() {
   await connectDB();
@@ -20,6 +21,11 @@ async function main() {
     email: 'seed@local',
   });
   console.log(`  proyectos: ${pr.creadas} creadas, ${pr.actualizadas} actualizadas (${pr.total} total)`);
+  const h = await seedHistoricoIngresos({
+    clerkUserId: 'seed-script',
+    email: 'seed@local',
+  });
+  console.log(`  histórico ingresos: ${h.upserts} años`);
   console.log('Listo.');
   await mongoose.disconnect();
 }

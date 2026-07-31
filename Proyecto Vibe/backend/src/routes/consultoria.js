@@ -31,6 +31,23 @@ import {
   TIPOS_PROYECTO,
   ROLES_PROYECTO,
 } from '../services/consultoriaService.js';
+import {
+  listarIngresosMensuales,
+  obtenerIngresoMensual,
+  upsertIngresoMensual,
+  sincronizarMesDesdeDetalle,
+  cerrarMes,
+  reabrirMes,
+  listarDetalleIngresos,
+  crearDetalleIngreso,
+  actualizarDetalleIngreso,
+  eliminarDetalleIngreso,
+  upsertNominaMensual,
+  seedHistoricoIngresos,
+  comparativoAnual,
+  resumenFacturasConsultoria,
+  resumenEgresosConsultoria,
+} from '../services/consultoriaIngresosService.js';
 
 const router = Router();
 const ROLES_EDICION = ['admin', 'editor'];
@@ -54,7 +71,7 @@ router.get('/meta', (_req, res) => {
   ok(res, {
     modulo: 'consultoria',
     nombre: 'Consultoría (BWConsulting)',
-    etapa: 4,
+    etapa: 5,
     enums: {
       ubicaciones: UBICACIONES_CONSULTORIA,
       tiposCliente: TIPOS_CLIENTE,
@@ -283,6 +300,154 @@ router.post('/seed/proyectos-operacion', async (req, res) => {
   }
   try {
     ok(res, await seedProyectosOperacion(req.usuario));
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+// Ingresos
+router.get('/ingresos', async (req, res) => {
+  try {
+    ok(res, await listarIngresosMensuales(req.query));
+  } catch (err) {
+    fail(res, err.message, 500);
+  }
+});
+
+router.get('/ingresos/comparativo', async (req, res) => {
+  try {
+    ok(res, await comparativoAnual(req.query.anio));
+  } catch (err) {
+    fail(res, err.message, 500);
+  }
+});
+
+router.get('/ingresos/:anio/:mes', async (req, res) => {
+  try {
+    ok(res, await obtenerIngresoMensual(req.params.anio, req.params.mes));
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.put('/ingresos/:anio/:mes', async (req, res) => {
+  try {
+    ok(
+      res,
+      await upsertIngresoMensual(
+        { ...req.body, anio: req.params.anio, mes: req.params.mes },
+        req.usuario
+      )
+    );
+  } catch (err) {
+    const status = err.code === 'DESCUADRE' ? 409 : 400;
+    res.status(status).json({
+      ok: false,
+      error: err.message,
+      conciliacion: err.conciliacion,
+    });
+  }
+});
+
+router.post('/ingresos/:anio/:mes/sincronizar', async (req, res) => {
+  try {
+    ok(res, await sincronizarMesDesdeDetalle(req.params.anio, req.params.mes, req.usuario));
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.post('/ingresos/:anio/:mes/cerrar', async (req, res) => {
+  try {
+    ok(res, await cerrarMes(req.params.anio, req.params.mes, req.usuario));
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.post('/ingresos/:anio/:mes/reabrir', async (req, res) => {
+  try {
+    ok(
+      res,
+      await reabrirMes(req.params.anio, req.params.mes, req.body.justificacion, req.usuario)
+    );
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.get('/ingresos-detalle', async (req, res) => {
+  try {
+    ok(res, await listarDetalleIngresos(req.query));
+  } catch (err) {
+    fail(res, err.message, 500);
+  }
+});
+
+router.post('/ingresos-detalle', async (req, res) => {
+  try {
+    ok(res, await crearDetalleIngreso(req.body, req.usuario), 201);
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.put('/ingresos-detalle/:id', async (req, res) => {
+  try {
+    const doc = await actualizarDetalleIngreso(req.params.id, req.body, req.usuario);
+    if (!doc) return fail(res, 'Detalle no encontrado', 404);
+    ok(res, doc);
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.delete('/ingresos-detalle/:id', async (req, res) => {
+  try {
+    const doc = await eliminarDetalleIngreso(req.params.id, req.usuario);
+    if (!doc) return fail(res, 'Detalle no encontrado', 404);
+    ok(res, doc);
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.put('/nomina/:anio/:mes', async (req, res) => {
+  try {
+    ok(
+      res,
+      await upsertNominaMensual(
+        { ...req.body, anio: req.params.anio, mes: req.params.mes },
+        req.usuario
+      )
+    );
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.get('/facturas-mes/:anio/:mes', async (req, res) => {
+  try {
+    ok(res, await resumenFacturasConsultoria(req.params.anio, req.params.mes));
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.get('/egresos-mes/:anio/:mes', async (req, res) => {
+  try {
+    ok(res, await resumenEgresosConsultoria(req.params.anio, req.params.mes));
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.post('/seed/historico-ingresos', async (req, res) => {
+  if (req.usuario?.rol !== 'admin') {
+    return fail(res, 'Solo admin puede ejecutar seed', 403);
+  }
+  try {
+    ok(res, await seedHistoricoIngresos(req.usuario));
   } catch (err) {
     fail(res, err.message, 400);
   }

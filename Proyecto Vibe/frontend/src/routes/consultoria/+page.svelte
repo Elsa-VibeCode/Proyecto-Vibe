@@ -32,10 +32,11 @@
         <p>Operación por consultor/cliente, semáforo y % compartido.</p>
         <span class="cta">Abrir →</span>
       </a>
-      <div class="card muted-card">
+      <a class="card link-card" href="/consultoria/ingresos">
         <h2>Ingresos</h2>
-        <p>Conciliación con facturas — etapa 5.</p>
-      </div>
+        <p>Detalle auditable, cierre de mes, conciliación con facturas.</p>
+        <span class="cta">Abrir →</span>
+      </a>
       <div class="card muted-card">
         <h2>Dashboard</h2>
         <p>KPIs y gráficas — etapa 6.</p>

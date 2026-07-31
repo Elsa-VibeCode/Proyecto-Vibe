@@ -329,17 +329,17 @@ Módulo de seguimiento operativo de Consultoría (antes BWS): pipeline, proyecto
 
 | Concepto | Detalle |
 |----------|---------|
-| **Rutas UI** | `/consultoria`, `/consultoria/propuestas`, `/consultoria/proyectos` |
-| **API** | `/api/consultoria` (clientes, propuestas, proyectos, resumen, seed) |
+| **Rutas UI** | `/consultoria`, `/propuestas`, `/proyectos`, `/ingresos` |
+| **API** | `/api/consultoria` (clientes, propuestas, proyectos, ingresos, nómina, seeds) |
 | **Colecciones** | Cliente, Propuesta, Proyecto, IngresoProyecto, IngresoMensual, NominaMensual, AuditLog |
-| **Reutiliza** | `Consultant` (Honorarios, incl. Mario), `Factura`, `Egreso` |
-| **Cierre de mes** | Manual; snapshot + audit_log |
-| **Etapa actual** | 4 — CRUD proyectos |
+| **Reutiliza** | `Consultant`, `Factura` (conciliación), `Egreso` (unidad Consulting) |
+| **Cierre de mes** | Manual; snapshot + audit_log; bloquea ediciones |
+| **Etapa actual** | 5 — Ingresos + conciliación |
 
 ```bash
 cd backend
-npm run seed:consultoria     # propuestas ene 2025 + extracto operación
-npm run test:consultoria     # motor: sumas, %, acumulados, gap, conciliación
+npm run seed:consultoria     # propuestas + proyectos + histórico ingresos
+npm run test:consultoria
 ```
 
 ---
