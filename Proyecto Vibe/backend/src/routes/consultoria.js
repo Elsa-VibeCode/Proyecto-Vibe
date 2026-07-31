@@ -14,16 +14,23 @@ import {
   cambiarStatusPropuesta,
   resumenPropuestas,
   seedPropuestasEnero2025,
+  listarProyectos,
+  obtenerProyecto,
+  crearProyecto,
+  actualizarProyecto,
+  eliminarProyecto,
+  cambiarStatusProyecto,
+  agregarNotaProyecto,
+  resumenProyectos,
+  seedProyectosOperacion,
   UBICACIONES_CONSULTORIA,
   TIPOS_CLIENTE,
   PROCESOS_PROPUESTA,
   STATUS_PROPUESTA,
-} from '../services/consultoriaService.js';
-import {
-  ROLES_PROYECTO,
-  TIPOS_PROYECTO,
   STATUS_PROYECTO,
-} from '../utils/consultoriaConstants.js';
+  TIPOS_PROYECTO,
+  ROLES_PROYECTO,
+} from '../services/consultoriaService.js';
 
 const router = Router();
 const ROLES_EDICION = ['admin', 'editor'];
@@ -47,7 +54,7 @@ router.get('/meta', (_req, res) => {
   ok(res, {
     modulo: 'consultoria',
     nombre: 'Consultoría (BWConsulting)',
-    etapa: 3,
+    etapa: 4,
     enums: {
       ubicaciones: UBICACIONES_CONSULTORIA,
       tiposCliente: TIPOS_CLIENTE,
@@ -176,6 +183,88 @@ router.delete('/propuestas/:id', async (req, res) => {
   }
 });
 
+// Proyectos
+router.get('/proyectos', async (req, res) => {
+  try {
+    ok(res, await listarProyectos(req.query));
+  } catch (err) {
+    fail(res, err.message, 500);
+  }
+});
+
+router.get('/proyectos/resumen', async (req, res) => {
+  try {
+    ok(res, await resumenProyectos(req.query));
+  } catch (err) {
+    fail(res, err.message, 500);
+  }
+});
+
+router.get('/proyectos/:id', async (req, res) => {
+  try {
+    const doc = await obtenerProyecto(req.params.id);
+    if (!doc) return fail(res, 'Proyecto no encontrado', 404);
+    ok(res, doc);
+  } catch (err) {
+    fail(res, err.message, 500);
+  }
+});
+
+router.post(
+  '/proyectos',
+  body('consultorId').notEmpty().withMessage('consultorId es obligatorio'),
+  body('clienteId').notEmpty().withMessage('clienteId es obligatorio'),
+  body('descripcion').trim().notEmpty().withMessage('descripción es obligatoria'),
+  async (req, res) => {
+    if (!revisarValidacion(req, res)) return;
+    try {
+      ok(res, await crearProyecto(req.body, req.usuario), 201);
+    } catch (err) {
+      fail(res, err.message, 400);
+    }
+  }
+);
+
+router.put('/proyectos/:id', async (req, res) => {
+  try {
+    const doc = await actualizarProyecto(req.params.id, req.body, req.usuario);
+    if (!doc) return fail(res, 'Proyecto no encontrado', 404);
+    ok(res, doc);
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.patch('/proyectos/:id/status', async (req, res) => {
+  try {
+    const doc = await cambiarStatusProyecto(req.params.id, req.body.status, req.usuario);
+    if (!doc) return fail(res, 'Proyecto no encontrado', 404);
+    ok(res, doc);
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.post('/proyectos/:id/notas', async (req, res) => {
+  try {
+    const doc = await agregarNotaProyecto(req.params.id, req.body.nota, req.usuario);
+    if (!doc) return fail(res, 'Proyecto no encontrado', 404);
+    ok(res, doc);
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.delete('/proyectos/:id', async (req, res) => {
+  try {
+    const doc = await eliminarProyecto(req.params.id, req.usuario);
+    if (!doc) return fail(res, 'Proyecto no encontrado', 404);
+    ok(res, doc);
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
 // Seed admin-only
 router.post('/seed/propuestas-enero-2025', async (req, res) => {
   if (req.usuario?.rol !== 'admin') {
@@ -183,6 +272,17 @@ router.post('/seed/propuestas-enero-2025', async (req, res) => {
   }
   try {
     ok(res, await seedPropuestasEnero2025(req.usuario));
+  } catch (err) {
+    fail(res, err.message, 400);
+  }
+});
+
+router.post('/seed/proyectos-operacion', async (req, res) => {
+  if (req.usuario?.rol !== 'admin') {
+    return fail(res, 'Solo admin puede ejecutar seed', 403);
+  }
+  try {
+    ok(res, await seedProyectosOperacion(req.usuario));
   } catch (err) {
     fail(res, err.message, 400);
   }

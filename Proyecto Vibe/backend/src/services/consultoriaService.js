@@ -1,15 +1,24 @@
 import { Consultant } from '../models/Consultant.js';
 import { ConsultoriaCliente } from '../models/ConsultoriaCliente.js';
 import { ConsultoriaPropuesta } from '../models/ConsultoriaPropuesta.js';
+import { ConsultoriaProyecto } from '../models/ConsultoriaProyecto.js';
 import { ConsultoriaAuditLog } from '../models/ConsultoriaAuditLog.js';
 import {
   PROCESOS_PROPUESTA,
   STATUS_PROPUESTA,
+  STATUS_PROYECTO,
   TIPOS_CLIENTE,
+  TIPOS_PROYECTO,
+  ROLES_PROYECTO,
   UBICACIONES_CONSULTORIA,
   DEFAULT_PCT_IVA_CONSULTORIA,
 } from '../utils/consultoriaConstants.js';
-import { redondearPesos, toCents, fromCents } from '../utils/consultoriaMotor.js';
+import {
+  redondearPesos,
+  toCents,
+  fromCents,
+  validarPctCompartido,
+} from '../utils/consultoriaMotor.js';
 
 async function registrarAudit({
   userId,
@@ -561,10 +570,343 @@ export async function seedPropuestasEnero2025(usuario) {
   };
 }
 
+// ---- Proyectos ----
+function popularProyecto(q) {
+  return q
+    .populate('consultorId', 'nombre')
+    .populate('consultorCompartidoId', 'nombre')
+    .populate('clienteId', 'nombre ubicacion tipoCliente')
+    .populate('propuestaId', 'numeroConsecutivo anio mes status monto');
+}
+
+export async function listarProyectos(filtros = {}) {
+  const filtro = {};
+  if (filtros.activos === 'true' || filtros.activos === true) filtro.activo = true;
+  if (filtros.activos === 'false') filtro.activo = false;
+  if (filtros.consultorId) {
+    filtro.$or = [
+      { consultorId: filtros.consultorId },
+      { consultorCompartidoId: filtros.consultorId },
+    ];
+  }
+  if (filtros.status) filtro.status = filtros.status;
+  if (filtros.tipo) filtro.tipo = filtros.tipo;
+  if (filtros.clienteId) filtro.clienteId = filtros.clienteId;
+  if (filtros.rol) filtro.rol = filtros.rol;
+
+  return popularProyecto(
+    ConsultoriaProyecto.find(filtro).sort({ status: 1, descripcion: 1 })
+  ).lean();
+}
+
+export async function obtenerProyecto(id) {
+  return popularProyecto(ConsultoriaProyecto.findById(id)).lean();
+}
+
+export async function resumenProyectos(filtros = {}) {
+  const docs = await listarProyectos({ ...filtros, activos: filtros.activos ?? 'true' });
+  const porConsultor = {};
+  const porStatus = Object.fromEntries(STATUS_PROYECTO.map((s) => [s, 0]));
+  const porTipo = Object.fromEntries(TIPOS_PROYECTO.map((t) => [t, 0]));
+  let montoTotal = 0;
+
+  for (const p of docs) {
+    porStatus[p.status] = (porStatus[p.status] || 0) + 1;
+    porTipo[p.tipo] = (porTipo[p.tipo] || 0) + 1;
+    montoTotal += toCents(p.montoContratado);
+    const cid = String(p.consultorId?._id || p.consultorId);
+    const nombre = p.consultorId?.nombre || cid;
+    if (!porConsultor[cid]) {
+      porConsultor[cid] = {
+        consultorId: cid,
+        nombre,
+        total: 0,
+        porStatus: Object.fromEntries(STATUS_PROYECTO.map((s) => [s, 0])),
+      };
+    }
+    porConsultor[cid].total += 1;
+    porConsultor[cid].porStatus[p.status] += 1;
+  }
+
+  return {
+    total: docs.length,
+    montoContratadoTotal: fromCents(montoTotal),
+    porStatus,
+    porTipo,
+    porConsultor: Object.values(porConsultor).sort((a, b) =>
+      a.nombre.localeCompare(b.nombre, 'es')
+    ),
+  };
+}
+
+function normalizarPayloadProyecto(datos) {
+  if (!datos.consultorId) throw new Error('consultorId es obligatorio');
+  if (!datos.clienteId) throw new Error('clienteId es obligatorio');
+  const descripcion = String(datos.descripcion || '').trim();
+  if (!descripcion) throw new Error('descripción es obligatoria');
+
+  const rol = datos.rol || 'LIDER';
+  if (!ROLES_PROYECTO.includes(rol)) throw new Error(`rol inválido: ${rol}`);
+
+  const tipo = datos.tipo || 'CONSULTORIA';
+  if (!TIPOS_PROYECTO.includes(tipo)) throw new Error(`tipo inválido: ${tipo}`);
+
+  const status = datos.status || 'INICIANDO';
+  if (!STATUS_PROYECTO.includes(status)) throw new Error(`status inválido: ${status}`);
+
+  let pctPrincipal = datos.pctConsultorPrincipal;
+  let pctCompartido = datos.pctConsultorCompartido;
+  if (rol === 'LIDER') {
+    pctPrincipal = 1;
+    pctCompartido = 0;
+  } else {
+    pctPrincipal = pctPrincipal !== undefined ? Number(pctPrincipal) : 0.5;
+    pctCompartido = pctCompartido !== undefined ? Number(pctCompartido) : 0.5;
+  }
+  const pctCheck = validarPctCompartido(pctPrincipal, pctCompartido, rol);
+  if (!pctCheck.ok) throw new Error(pctCheck.error);
+
+  if (rol === 'COMPARTIDO' && !datos.consultorCompartidoId) {
+    throw new Error('consultorCompartidoId es obligatorio cuando rol es COMPARTIDO');
+  }
+
+  const monto =
+    datos.montoContratado === null || datos.montoContratado === undefined || datos.montoContratado === ''
+      ? 0
+      : redondearPesos(Number(datos.montoContratado));
+  if (!Number.isFinite(monto) || monto < 0) throw new Error('montoContratado inválido');
+
+  return {
+    consultorId: datos.consultorId,
+    rol,
+    consultorCompartidoId: rol === 'COMPARTIDO' ? datos.consultorCompartidoId : null,
+    pctConsultorPrincipal: pctCheck.pctPrincipal,
+    pctConsultorCompartido: pctCheck.pctCompartido,
+    clienteId: datos.clienteId,
+    descripcion,
+    tipo,
+    status,
+    propuestaId: datos.propuestaId || null,
+    fechaInicio: datos.fechaInicio ? new Date(datos.fechaInicio) : null,
+    fechaFinEstimada: datos.fechaFinEstimada ? new Date(datos.fechaFinEstimada) : null,
+    fechaFinReal: datos.fechaFinReal ? new Date(datos.fechaFinReal) : null,
+    montoContratado: monto,
+    pctIva:
+      datos.pctIva !== undefined && datos.pctIva !== null && datos.pctIva !== ''
+        ? Number(datos.pctIva)
+        : DEFAULT_PCT_IVA_CONSULTORIA,
+    notas: String(datos.notas || '').trim(),
+    activo: datos.activo !== false,
+  };
+}
+
+export async function crearProyecto(datos, usuario) {
+  const payload = normalizarPayloadProyecto(datos);
+  const meta = clerkMeta(usuario);
+  payload.createdBy = meta.userId;
+  payload.updatedBy = meta.userId;
+  const doc = await ConsultoriaProyecto.create(payload);
+  await registrarAudit({
+    ...meta,
+    entidad: 'ConsultoriaProyecto',
+    entidadId: doc._id,
+    accion: 'CREATE',
+    valorNuevo: {
+      descripcion: doc.descripcion,
+      status: doc.status,
+      consultorId: String(doc.consultorId),
+    },
+  });
+  return obtenerProyecto(doc._id);
+}
+
+export async function actualizarProyecto(id, datos, usuario) {
+  const doc = await ConsultoriaProyecto.findById(id);
+  if (!doc) return null;
+  const antes = { status: doc.status, descripcion: doc.descripcion, rol: doc.rol };
+
+  const merged = {
+    consultorId: datos.consultorId ?? doc.consultorId,
+    rol: datos.rol ?? doc.rol,
+    consultorCompartidoId:
+      datos.consultorCompartidoId !== undefined
+        ? datos.consultorCompartidoId
+        : doc.consultorCompartidoId,
+    pctConsultorPrincipal:
+      datos.pctConsultorPrincipal !== undefined
+        ? datos.pctConsultorPrincipal
+        : doc.pctConsultorPrincipal,
+    pctConsultorCompartido:
+      datos.pctConsultorCompartido !== undefined
+        ? datos.pctConsultorCompartido
+        : doc.pctConsultorCompartido,
+    clienteId: datos.clienteId ?? doc.clienteId,
+    descripcion: datos.descripcion ?? doc.descripcion,
+    tipo: datos.tipo ?? doc.tipo,
+    status: datos.status ?? doc.status,
+    propuestaId: datos.propuestaId !== undefined ? datos.propuestaId : doc.propuestaId,
+    fechaInicio: datos.fechaInicio !== undefined ? datos.fechaInicio : doc.fechaInicio,
+    fechaFinEstimada:
+      datos.fechaFinEstimada !== undefined ? datos.fechaFinEstimada : doc.fechaFinEstimada,
+    fechaFinReal: datos.fechaFinReal !== undefined ? datos.fechaFinReal : doc.fechaFinReal,
+    montoContratado:
+      datos.montoContratado !== undefined ? datos.montoContratado : doc.montoContratado,
+    pctIva: datos.pctIva !== undefined ? datos.pctIva : doc.pctIva,
+    notas: datos.notas !== undefined ? datos.notas : doc.notas,
+    activo: datos.activo !== undefined ? datos.activo : doc.activo,
+  };
+
+  const payload = normalizarPayloadProyecto(merged);
+  Object.assign(doc, payload);
+  const meta = clerkMeta(usuario);
+  doc.updatedBy = meta.userId;
+  await doc.save();
+
+  await registrarAudit({
+    ...meta,
+    entidad: 'ConsultoriaProyecto',
+    entidadId: doc._id,
+    accion: 'UPDATE',
+    valorAnterior: antes,
+    valorNuevo: { status: doc.status, descripcion: doc.descripcion, rol: doc.rol },
+    justificacion: String(datos.justificacion || '').trim(),
+  });
+  return obtenerProyecto(doc._id);
+}
+
+export async function eliminarProyecto(id, usuario) {
+  const doc = await ConsultoriaProyecto.findByIdAndDelete(id);
+  if (!doc) return null;
+  const meta = clerkMeta(usuario);
+  await registrarAudit({
+    ...meta,
+    entidad: 'ConsultoriaProyecto',
+    entidadId: id,
+    accion: 'DELETE',
+    valorAnterior: { descripcion: doc.descripcion, status: doc.status },
+  });
+  return { _id: id, eliminado: true };
+}
+
+export async function cambiarStatusProyecto(id, status, usuario) {
+  if (!STATUS_PROYECTO.includes(status)) throw new Error(`status inválido: ${status}`);
+  const extra = {};
+  if (status === 'TERMINADO') extra.fechaFinReal = new Date();
+  return actualizarProyecto(id, { status, ...extra }, usuario);
+}
+
+export async function agregarNotaProyecto(id, nota, usuario) {
+  const doc = await ConsultoriaProyecto.findById(id);
+  if (!doc) return null;
+  const linea = String(nota || '').trim();
+  if (!linea) throw new Error('nota vacía');
+  const stamp = new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
+  doc.notas = doc.notas ? `${doc.notas}\n[${stamp}] ${linea}` : `[${stamp}] ${linea}`;
+  const meta = clerkMeta(usuario);
+  doc.updatedBy = meta.userId;
+  await doc.save();
+  await registrarAudit({
+    ...meta,
+    entidad: 'ConsultoriaProyecto',
+    entidadId: id,
+    accion: 'UPDATE',
+    campo: 'notas',
+    valorNuevo: linea,
+  });
+  return obtenerProyecto(id);
+}
+
+/**
+ * Seed extracto de operación (Excel BWS). Idempotente por consultor+cliente+descripción.
+ */
+export async function seedProyectosOperacion(usuario) {
+  await Consultant.findOneAndUpdate(
+    { nombre: 'Mario' },
+    { $set: { nombre: 'Mario', activo: true } },
+    { upsert: true, new: true, setDefaultsOnInsert: true, collation: { locale: 'es', strength: 2 } }
+  );
+
+  const filas = [
+    // Ulises
+    { consultor: 'Ulises', cliente: 'Water House', descripcion: 'Water House - Comité Estratégico', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'Ulises', cliente: 'Factor Global', descripcion: 'Factor Global', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'COMPARTIDO', compartido: 'AP', pctP: 0.5, pctC: 0.5 },
+    { consultor: 'Ulises', cliente: 'Intermex', descripcion: 'Intermex', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'Ulises', cliente: 'Heineken Tecate', descripcion: 'Heineken team building', tipo: 'CONSULTORIA', status: 'TERMINADO', rol: 'COMPARTIDO', compartido: 'AP', pctP: 0.5, pctC: 0.5 },
+    { consultor: 'Ulises', cliente: 'Promédica', descripcion: 'ProMedica', tipo: 'CONSULTORIA', status: 'TERMINADO', rol: 'COMPARTIDO', compartido: 'Mario', pctP: 0.5, pctC: 0.5 },
+    { consultor: 'Ulises', cliente: 'JCAS', descripcion: 'JCAS', tipo: 'CONSULTORIA', status: 'INICIANDO', rol: 'LIDER' },
+    { consultor: 'Ulises', cliente: 'Positano', descripcion: 'Positano gobierno corporativo', tipo: 'CONSULTORIA', status: 'INICIANDO', rol: 'COMPARTIDO', compartido: 'AP', pctP: 0.5, pctC: 0.5 },
+    { consultor: 'Ulises', cliente: 'Circle K', descripcion: 'Circle K', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'COMPARTIDO', compartido: 'AP', pctP: 0.5, pctC: 0.5 },
+    { consultor: 'Ulises', cliente: 'Templer', descripcion: 'Templer', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'Ulises', cliente: 'Demek', descripcion: 'Demek', tipo: 'PLATAFORMA', status: 'INICIANDO', rol: 'LIDER' },
+    { consultor: 'Ulises', cliente: 'Index', descripcion: 'Index', tipo: 'PLATAFORMA', status: 'INICIANDO', rol: 'LIDER' },
+    { consultor: 'Ulises', cliente: 'Fundación Index', descripcion: 'Fundación Index', tipo: 'PLATAFORMA', status: 'EN_PROCESO', rol: 'LIDER' },
+    // AP (extracto)
+    { consultor: 'AP', cliente: 'Novamex', descripcion: 'Novamex', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'AP', cliente: 'Copachisa', descripcion: 'Copachisa', tipo: 'PLATAFORMA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'AP', cliente: 'AF', descripcion: 'AF', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'AP', cliente: 'Grupo Beh', descripcion: 'Grupo Beh', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'AP', cliente: 'Amexcap', descripcion: 'Amexcap', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'AP', cliente: 'Eludesa', descripcion: 'Eludesa', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'AP', cliente: 'Fechac', descripcion: 'Fechac', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'AP', cliente: 'Interbandas', descripcion: 'Interbandas', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'AP', cliente: 'Coder', descripcion: 'Coder', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'AP', cliente: 'WHG', descripcion: 'WHG', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'AP', cliente: 'Coparmex', descripcion: 'Coparmex (múltiples plazas)', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+    { consultor: 'AP', cliente: 'Maple Bear', descripcion: 'Maple Bear', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'COMPARTIDO', compartido: 'Elsa', pctP: 0.5, pctC: 0.5 },
+    // Elsa
+    { consultor: 'Elsa', cliente: 'Maple Bear', descripcion: 'Maple Bear', tipo: 'CONSULTORIA', status: 'EN_PROCESO', rol: 'LIDER' },
+  ];
+
+  let creadas = 0;
+  let actualizadas = 0;
+
+  for (const f of filas) {
+    const consultor = await consultorPorNombre(f.consultor);
+    const cliente = await upsertClientePorNombre(f.cliente, {
+      ubicacion: 'CUU',
+      tipoCliente: 'RECURRENTE',
+    });
+    const compartido = f.compartido ? await consultorPorNombre(f.compartido) : null;
+
+    const existente = await ConsultoriaProyecto.findOne({
+      consultorId: consultor._id,
+      clienteId: cliente._id,
+      descripcion: f.descripcion,
+    });
+
+    const payload = {
+      consultorId: consultor._id,
+      clienteId: cliente._id,
+      descripcion: f.descripcion,
+      tipo: f.tipo,
+      status: f.status,
+      rol: f.rol,
+      consultorCompartidoId: compartido?._id || null,
+      pctConsultorPrincipal: f.pctP ?? (f.rol === 'LIDER' ? 1 : 0.5),
+      pctConsultorCompartido: f.pctC ?? (f.rol === 'LIDER' ? 0 : 0.5),
+      montoContratado: 0,
+      activo: true,
+    };
+
+    if (existente) {
+      await actualizarProyecto(String(existente._id), payload, usuario);
+      actualizadas += 1;
+    } else {
+      await crearProyecto(payload, usuario);
+      creadas += 1;
+    }
+  }
+
+  return { creadas, actualizadas, total: filas.length };
+}
+
 export {
   UBICACIONES_CONSULTORIA,
   TIPOS_CLIENTE,
   PROCESOS_PROPUESTA,
   STATUS_PROPUESTA,
+  STATUS_PROYECTO,
+  TIPOS_PROYECTO,
+  ROLES_PROYECTO,
   DEFAULT_PCT_IVA_CONSULTORIA,
 };
