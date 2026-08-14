@@ -59,7 +59,11 @@ const facturaSchema = new mongoose.Schema(
     mes: { type: String, index: true }, // YYYY-MM, calculado en pre-validate
     clasificacionAuto: { type: Boolean, default: false }, // true = vino del mapa
     // Marca las facturas creadas por la migración desde Excel (respaldo/trazabilidad).
-    origen: { type: String, enum: ['excel-migracion', 'manual', 'sicofi'], default: 'manual' },
+    origen: {
+      type: String,
+      enum: ['excel-migracion', 'manual', 'sicofi', 'cfdi-xml'],
+      default: 'manual',
+    },
     uuid: { type: String, trim: true, default: '', sparse: true },
     deletedAt: { type: Date, default: null, index: true },
   },

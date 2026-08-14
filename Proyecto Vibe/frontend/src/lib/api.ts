@@ -156,6 +156,52 @@ export async function apiSubirArchivo<T>(
   return datos as T;
 }
 
+/** Sube varios archivos bajo el mismo campo (p. ej. multer.array). */
+export async function apiSubirArchivos<T>(
+  endpoint: string,
+  archivos: File[],
+  campo = 'archivos',
+  camposExtra?: Record<string, string>
+): Promise<T> {
+  const formData = new FormData();
+  for (const archivo of archivos) {
+    formData.append(campo, archivo);
+  }
+
+  if (camposExtra) {
+    for (const [clave, valor] of Object.entries(camposExtra)) {
+      formData.append(clave, valor);
+    }
+  }
+
+  const cabeceras: Record<string, string> = {};
+  const token = await resolverTokenAuth();
+  if (token) cabeceras.Authorization = `Bearer ${token}`;
+
+  let respuesta: Response;
+
+  try {
+    respuesta = await fetch(construirUrl(endpoint), {
+      method: 'POST',
+      headers: cabeceras,
+      body: formData,
+    });
+  } catch {
+    throw new Error('No se pudo conectar con el servidor para subir los archivos.');
+  }
+
+  const datos = await respuesta.json().catch(() => ({}));
+
+  if (!respuesta.ok) {
+    const mensaje =
+      (datos as { mensaje?: string; error?: string })?.mensaje ??
+      (datos as { error?: string })?.error;
+    throw new Error(mensaje || 'Error al subir los archivos');
+  }
+
+  return datos as T;
+}
+
 export async function apiDescargar(endpoint: string, nombreArchivo: string): Promise<void> {
   const cabeceras: Record<string, string> = {};
   const token = await resolverTokenAuth();

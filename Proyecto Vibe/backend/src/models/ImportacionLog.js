@@ -10,7 +10,7 @@ const errorImportSchema = new mongoose.Schema(
 
 const importacionLogSchema = new mongoose.Schema(
   {
-    fuente: { type: String, enum: ['sicofi', 'excel'], default: 'sicofi' },
+    fuente: { type: String, enum: ['sicofi', 'excel', 'cfdi-xml'], default: 'sicofi' },
     usuario: { type: String, default: '' },
     nombreArchivo: { type: String, default: '' },
     archivoPath: { type: String, default: '' },

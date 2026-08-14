@@ -9,6 +9,7 @@
   import Toast from '$lib/components/Toast.svelte';
   import FacturaForm from '$lib/components/FacturaForm.svelte';
   import SicofiImportWizard from '$lib/components/SicofiImportWizard.svelte';
+  import CfdiXmlImportWizard from '$lib/components/CfdiXmlImportWizard.svelte';
   import type { SicofiImportResponse } from '$lib/types/sicofi';
   import type {
     FacturaDocument,
@@ -52,6 +53,7 @@
   let toastInterval: ReturnType<typeof setInterval> | null = null;
 
   let wizardSicofiAbierto = $state(false);
+  let wizardCfdiXmlAbierto = $state(false);
   let logImportErrores = $state<{ fila: number; mensaje: string }[]>([]);
   let modalLogImport = $state(false);
   let modoVencidas = $state(false);
@@ -445,6 +447,32 @@
     await cargarDatos(true, mesesApi);
   }
 
+  async function onImportCfdiXmlCompleto(resumenImport: {
+    creadas: number;
+    actualizadas: number;
+    ignoradas: number;
+    sinClasificar: number;
+    errores: { fila: number; mensaje: string }[];
+  }) {
+    logImportErrores = resumenImport.errores ?? [];
+    const lineas = [`✓ ${resumenImport.creadas} facturas GAVM/XML creadas`];
+    if (resumenImport.actualizadas) lineas.push(`⚡ ${resumenImport.actualizadas} actualizadas`);
+    if (resumenImport.ignoradas) lineas.push(`⚡ ${resumenImport.ignoradas} duplicadas ignoradas`);
+    if (resumenImport.sinClasificar) {
+      lineas.push(`⚠ ${resumenImport.sinClasificar} sin clasificar`);
+      mensaje = `${resumenImport.sinClasificar} facturas sin clasificar — usa el filtro "Sin clasificar".`;
+    } else {
+      mensaje = 'Importación XML CFDI completada';
+    }
+    if (resumenImport.errores?.length) lineas.push(`✖ ${resumenImport.errores.length} con error`);
+    toastMensaje = lineas.join(' · ');
+    toastFacturaId = '';
+    toastVisible = true;
+    toastSegundos = 0;
+    const mesesApi = await cargarMesesDisponibles();
+    await cargarDatos(true, mesesApi);
+  }
+
   function filtrarSinClasificar() {
     filtros = {
       ...filtros,
@@ -538,6 +566,9 @@
         </button>
         <button type="button" class="btn btn-secondary" onclick={() => (wizardSicofiAbierto = true)}>
           Importar Sicofi
+        </button>
+        <button type="button" class="btn btn-secondary" onclick={() => (wizardCfdiXmlAbierto = true)}>
+          Importar XML (Mario / GAVM)
         </button>
         <a href="/facturacion/importaciones" class="btn btn-secondary btn-sm">Historial imports</a>
         <button
@@ -939,6 +970,12 @@
     abierto={wizardSicofiAbierto}
     onCerrar={() => (wizardSicofiAbierto = false)}
     onCompletado={onImportSicofiCompleto}
+  />
+
+  <CfdiXmlImportWizard
+    abierto={wizardCfdiXmlAbierto}
+    onCerrar={() => (wizardCfdiXmlAbierto = false)}
+    onCompletado={onImportCfdiXmlCompleto}
   />
 
   <Modal abierto={modalLogImport} titulo="Errores de importación" onCerrar={() => (modalLogImport = false)}>
