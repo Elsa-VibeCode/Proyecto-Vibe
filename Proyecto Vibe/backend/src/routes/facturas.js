@@ -27,6 +27,7 @@ import {
   listarImportaciones,
   parsearArchivoSicofi,
 } from '../services/sicofiImportService.js';
+import { previewCfdiXml, importarCfdiXml } from '../services/cfdiXmlImportService.js';
 import { invalidarPanelPorMes, invalidarPanelCompleto } from '../services/panel/invalidarPanel.js';
 import { obtenerFacturasPendientesComplemento } from '../services/complementoPagoService.js';
 
@@ -62,6 +63,35 @@ const uploadSicofi = multer({
     );
   },
 });
+
+function archivoCfdiPermitido(file) {
+  const nombre = String(file.originalname ?? '').toLowerCase();
+  if (/\.xml$/i.test(nombre)) return true;
+  return (
+    file.mimetype === 'text/xml' ||
+    file.mimetype === 'application/xml' ||
+    file.mimetype === 'application/octet-stream'
+  );
+}
+
+const uploadCfdi = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 100 },
+  fileFilter: (_req, file, cb) => {
+    const ok = archivoCfdiPermitido(file);
+    cb(ok ? null : new Error('Solo se aceptan XML de CFDI (no PDF)'), ok);
+  },
+});
+
+function parseJsonBodyField(raw) {
+  if (raw == null || raw === '') return undefined;
+  if (typeof raw === 'object') return raw;
+  try {
+    return JSON.parse(String(raw));
+  } catch {
+    return undefined;
+  }
+}
 
 function bufferDesdeBody(body) {
   if (body?.csvBase64) {
@@ -356,6 +386,68 @@ router.post(
     }
   }
 );
+
+router.post('/preview-cfdi-xml', requiereRol(...ROLES_EDICION), (req, res) => {
+  uploadCfdi.array('archivos', 100)(req, res, async (errMulter) => {
+    if (errMulter) {
+      const mensaje =
+        errMulter instanceof multer.MulterError
+          ? errMulter.code === 'LIMIT_FILE_COUNT'
+            ? 'Máximo 100 XML por lote'
+            : 'Algún archivo excede 5 MB o el lote es inválido'
+          : errMulter.message;
+      return fail(res, mensaje, 400);
+    }
+
+    try {
+      const archivos = req.files ?? [];
+      if (!archivos.length) return fail(res, 'Sube uno o más XML de CFDI (no PDF)');
+
+      const defaults = parseJsonBodyField(req.body?.defaults) ?? {};
+      const preview = await previewCfdiXml(archivos, defaults);
+      ok(res, preview);
+    } catch (err) {
+      fail(res, err instanceof Error ? err.message : 'No se pudo previsualizar los XML', 400);
+    }
+  });
+});
+
+router.post('/import-cfdi-xml', requiereRol(...ROLES_EDICION), (req, res) => {
+  uploadCfdi.array('archivos', 100)(req, res, async (errMulter) => {
+    if (errMulter) {
+      const mensaje =
+        errMulter instanceof multer.MulterError
+          ? errMulter.code === 'LIMIT_FILE_COUNT'
+            ? 'Máximo 100 XML por lote'
+            : 'Algún archivo excede 5 MB o el lote es inválido'
+          : errMulter.message;
+      return fail(res, mensaje, 400);
+    }
+
+    try {
+      const archivos = req.files ?? [];
+      if (!archivos.length) return fail(res, 'Sube uno o más XML de CFDI (no PDF)');
+
+      const defaults = parseJsonBodyField(req.body?.defaults) ?? {};
+      const estrategiaDuplicados = String(req.body?.estrategiaDuplicados || 'ignorar');
+      if (!['ignorar', 'actualizarVacios', 'sobrescribir'].includes(estrategiaDuplicados)) {
+        return fail(res, 'estrategiaDuplicados inválida');
+      }
+
+      const resultado = await importarCfdiXml({
+        archivos,
+        defaults,
+        estrategiaDuplicados,
+        usuarioId: req.clerkUserId ?? String(req.usuario?._id ?? ''),
+      });
+
+      invalidarPanelCompleto();
+      ok(res, resultado);
+    } catch (err) {
+      fail(res, err instanceof Error ? err.message : 'Error al importar XML CFDI', 400);
+    }
+  });
+});
 
 function CAMPOS_CREACION(datos) {
   return Object.entries(datos)

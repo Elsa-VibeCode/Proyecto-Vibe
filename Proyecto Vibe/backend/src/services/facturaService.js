@@ -18,7 +18,7 @@ const UNIDADES_CLASIFICABLES = new Set(['Consulting', 'Technologies', 'Grupo']);
 
 export function normalizarRfcEmisor(valor) {
   const v = String(valor ?? '').trim().toUpperCase();
-  if (v === 'GAVM') return 'GAVM';
+  if (v === 'GAVM' || v.startsWith('GAVM')) return 'GAVM';
   if (v === 'GBL' || v.startsWith('GBL')) return 'GBL';
   return v ? 'OTRO' : 'GBL';
 }

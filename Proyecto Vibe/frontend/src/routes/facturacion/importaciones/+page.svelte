@@ -36,13 +36,13 @@
 </script>
 
 <svelte:head>
-  <title>Importaciones Sicofi — AdminSys</title>
+  <title>Importaciones — AdminSys</title>
 </svelte:head>
 
 <div class="page-header">
   <div>
-    <h1>Historial de importaciones Sicofi</h1>
-    <p>Registro de cargas CSV desde cfd.sicofi.com.mx</p>
+    <h1>Historial de importaciones</h1>
+    <p>Cargas Sicofi (CSV) y XML CFDI (Mario / GAVM)</p>
   </div>
   <a href="/facturacion" class="btn btn-secondary">← Volver a facturación</a>
 </div>
@@ -59,6 +59,7 @@
       <thead>
         <tr>
           <th>Fecha</th>
+          <th>Fuente</th>
           <th>Archivo</th>
           <th>Filas</th>
           <th>Creadas</th>
@@ -72,6 +73,7 @@
         {#each importaciones as imp}
           <tr>
             <td>{formatearFecha(imp.createdAt)}</td>
+            <td>{imp.fuente === 'cfdi-xml' ? 'XML CFDI' : imp.fuente === 'excel' ? 'Excel' : 'Sicofi'}</td>
             <td>{imp.nombreArchivo || '—'}</td>
             <td>{imp.totalFilas}</td>
             <td>{imp.creadas}</td>
