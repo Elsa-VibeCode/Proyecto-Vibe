@@ -452,10 +452,15 @@
     actualizadas: number;
     ignoradas: number;
     sinClasificar: number;
+    complementosCreados?: number;
+    complementosIgnorados?: number;
     errores: { fila: number; mensaje: string }[];
   }) {
     logImportErrores = resumenImport.errores ?? [];
-    const lineas = [`✓ ${resumenImport.creadas} facturas GAVM/XML creadas`];
+    const lineas = [`✓ ${resumenImport.creadas} facturas creadas`];
+    if (resumenImport.complementosCreados) {
+      lineas.push(`✓ ${resumenImport.complementosCreados} complementos (marcadas pagadas)`);
+    }
     if (resumenImport.actualizadas) lineas.push(`⚡ ${resumenImport.actualizadas} actualizadas`);
     if (resumenImport.ignoradas) lineas.push(`⚡ ${resumenImport.ignoradas} duplicadas ignoradas`);
     if (resumenImport.sinClasificar) {

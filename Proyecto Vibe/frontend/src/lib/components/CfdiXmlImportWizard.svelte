@@ -4,11 +4,12 @@
   import { formatearFecha } from '$lib/utils';
   import Modal from '$lib/components/Modal.svelte';
 
-  type Badge = 'NUEVA' | 'DUPLICADO' | 'SIN_CLASIFICAR' | 'ERROR' | 'OMITIDA';
+  type Badge = 'NUEVA' | 'DUPLICADO' | 'SIN_CLASIFICAR' | 'SIN_FACTURA' | 'ERROR' | 'OMITIDA';
   type Estrategia = 'ignorar' | 'actualizarVacios' | 'sobrescribir';
 
   interface CfdiFila {
     archivo: string;
+    tipoXml?: 'factura' | 'complemento';
     badge: Badge;
     mensaje?: string;
     noFactura: string;
@@ -21,6 +22,8 @@
     rfcEmisor: string;
     unidad: string | null;
     uuid?: string;
+    metodoPago?: string;
+    estatusPago?: string;
     meta?: { rfcEmisorRaw?: string; nombreEmisor?: string };
   }
 
@@ -37,6 +40,8 @@
     actualizadas: number;
     ignoradas: number;
     sinClasificar: number;
+    complementosCreados?: number;
+    complementosIgnorados?: number;
     errores: { fila: number; archivo?: string; mensaje: string }[];
   }
 
@@ -61,6 +66,7 @@
     NUEVA: 'Nueva',
     DUPLICADO: 'Duplicado',
     SIN_CLASIFICAR: 'Sin clasificar',
+    SIN_FACTURA: 'Sin factura',
     ERROR: 'Error',
     OMITIDA: 'Omitida',
   };
@@ -185,12 +191,13 @@
   );
 </script>
 
-<Modal abierto={abierto} titulo="Importar XML CFDI (Mario / GAVM)" anchura="920px" onCerrar={cerrar}>
+<Modal abierto={abierto} titulo="Importar XML CFDI (factura y complemento)" anchura="960px" onCerrar={cerrar}>
   <div class="wizard">
     <p class="ayuda">
-      Mario factura con otra razón social (GAVM) fuera de Sicofi GBL. Sube los
-      <strong>XML</strong> del CFDI (puedes seleccionar varios). Los PDF no se importan: el XML
-      ya trae folio, cliente, montos, IVA, UUID y emisor.
+      Sube los <strong>XML</strong> de factura (tipo I) y, si aplica, los de
+      <strong>complemento de pago</strong> (tipo P / REP). Puedes seleccionar ambos en el mismo lote:
+      las PPD quedan pagadas al importar el complemento; las PUE se marcan pagadas con la fecha del CFDI.
+      Los PDF no se importan.
     </p>
 
     <div class="fila-controles">
@@ -277,6 +284,7 @@
           <thead>
             <tr>
               <th>Archivo</th>
+              <th>Tipo</th>
               <th>Estado</th>
               <th>Folio</th>
               <th>Cliente</th>
@@ -290,6 +298,7 @@
             {#each filasVisibles as fila}
               <tr>
                 <td class="mono" title={fila.archivo}>{fila.archivo}</td>
+                <td>{fila.tipoXml === 'complemento' ? 'Complemento' : 'Factura'}</td>
                 <td>
                   <span class={`badge badge-${fila.badge}`}>{BADGE_LABELS[fila.badge]}</span>
                   {#if fila.mensaje}<span class="msg">{fila.mensaje}</span>{/if}
@@ -332,7 +341,7 @@
           disabled={procesando || !preview.filas.length}
           onclick={() => void importar()}
         >
-          {procesando ? 'Importando…' : `Importar ${preview.filas.length} factura(s)`}
+          {procesando ? 'Importando…' : `Importar ${preview.filas.length} XML`}
         </button>
       </div>
     {/if}
@@ -467,6 +476,10 @@
   .badge-SIN_CLASIFICAR {
     background: #ffead5;
     color: #b93815;
+  }
+  .badge-SIN_FACTURA {
+    background: #fee4e2;
+    color: #b42318;
   }
   .msg {
     display: block;
