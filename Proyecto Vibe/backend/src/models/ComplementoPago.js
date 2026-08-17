@@ -33,7 +33,7 @@ const complementoPagoSchema = new mongoose.Schema(
     unidad: { type: String, enum: UNIDADES_COMPLEMENTO, index: true },
     cliente: String,
     observaciones: String,
-    origen: { type: String, enum: ['manual', 'sicofi_import'], default: 'manual' },
+    origen: { type: String, enum: ['manual', 'sicofi_import', 'cfdi_xml'], default: 'manual' },
     createdBy: String,
   },
   { timestamps: true }

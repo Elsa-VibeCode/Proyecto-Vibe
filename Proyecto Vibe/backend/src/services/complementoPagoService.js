@@ -38,6 +38,25 @@ export async function recalcularFacturaComplementos(facturaId, session = null) {
 
   factura.montoPagado = redondear(montoPagado);
   factura.complementosEmitidos = ids;
+
+  if ((factura.metodoPago || 'PUE') === 'PPD') {
+    const total = Number(factura.total) || 0;
+    if (factura.montoPagado <= 0) {
+      factura.estatusPago = 'PENDIENTE';
+      factura.fechaPago = null;
+    } else {
+      factura.estatusPago = total - factura.montoPagado <= 0.01 ? 'PAGADO' : 'PARCIAL';
+      let fechaPago = null;
+      for (const comp of complementos) {
+        const fp = comp.fechaPago ? new Date(comp.fechaPago) : null;
+        if (fp && !Number.isNaN(fp.getTime()) && (!fechaPago || fp > fechaPago)) {
+          fechaPago = fp;
+        }
+      }
+      factura.fechaPago = fechaPago;
+    }
+  }
+
   await factura.save(opts);
   return factura;
 }
