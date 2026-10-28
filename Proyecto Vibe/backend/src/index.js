@@ -54,7 +54,8 @@ app.use(
 // Webhooks de Clerk requieren body sin parsear (Svix)
 app.use('/api/webhooks', webhookRoutes);
 
-app.use(express.json());
+// Las importaciones reenvían el archivo en base64 (hasta 15 MB → ~20 MB).
+app.use(express.json({ limit: '25mb' }));
 
 app.get('/api/salud', (_req, res) => {
   res.json({

@@ -855,8 +855,9 @@ export async function importarSicofi({
 }
 
 export async function listarImportaciones(limite = 20) {
-  return ImportacionLog.find({ fuente: 'sicofi' })
+  return ImportacionLog.find()
     .sort({ createdAt: -1 })
     .limit(limite)
+    .select('-mappingUsado -archivoPath')
     .lean();
 }
