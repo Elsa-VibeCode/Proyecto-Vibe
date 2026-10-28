@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { isValidObjectId } from 'mongoose';
 import { body, validationResult } from 'express-validator';
 import { Factura } from '../models/Factura.js';
 import { protegerRuta, requiereRol } from '../middleware/auth.js';
@@ -183,6 +184,15 @@ router.post('/migrar', requiereRol('admin'), async (req, res) => {
   ok(res, resumen);
 });
 
+router.get('/importaciones', requiereRol(...ROLES_EDICION), async (req, res) => {
+  try {
+    const limite = Math.min(Number(req.query.limite) || 20, 100);
+    ok(res, { importaciones: await listarImportaciones(limite) });
+  } catch (err) {
+    fail(res, err instanceof Error ? err.message : 'No se pudo listar el historial', 500);
+  }
+});
+
 router.patch('/:id/clasificar', requiereRol(...ROLES_EDICION), async (req, res) => {
   const unidad = String(req.body?.unidad ?? '').trim();
   if (!unidad) return fail(res, 'Indique la unidad (Consulting, Technologies o Grupo)');
@@ -198,9 +208,15 @@ router.patch('/:id/clasificar', requiereRol(...ROLES_EDICION), async (req, res) 
 });
 
 router.get('/:id', async (req, res) => {
-  const factura = await Factura.findOne({ _id: req.params.id, ...FILTRO_ACTIVAS });
-  if (!factura) return fail(res, 'Factura no encontrada', 404);
-  ok(res, { factura });
+  if (!isValidObjectId(req.params.id)) return fail(res, 'Factura no encontrada', 404);
+
+  try {
+    const factura = await Factura.findOne({ _id: req.params.id, ...FILTRO_ACTIVAS });
+    if (!factura) return fail(res, 'Factura no encontrada', 404);
+    ok(res, { factura });
+  } catch (err) {
+    fail(res, err instanceof Error ? err.message : 'No se pudo consultar la factura', 400);
+  }
 });
 
 const validaciones = [
@@ -296,11 +312,6 @@ router.delete('/:id', requiereRol(...ROLES_EDICION), async (req, res) => {
 
   invalidarPanelPorMes(factura.mes);
   ok(res, { mensaje: 'Factura eliminada correctamente', factura });
-});
-
-router.get('/importaciones', requiereRol(...ROLES_EDICION), async (req, res) => {
-  const limite = Math.min(Number(req.query.limite) || 20, 100);
-  ok(res, { importaciones: await listarImportaciones(limite) });
 });
 
 router.post('/preview-sicofi', requiereRol(...ROLES_EDICION), (req, res) => {
